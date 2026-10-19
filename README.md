@@ -21,22 +21,24 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/huakan88/story-to-film my-film && cd my-film
+git clone https://github.com/huakan88/story-to-film && cd story-to-film
 
-node scripts/vendor-three.mjs          # 可选：把 three/gsap 冻结到本地（离线、可复现）
-om still  . --at 1,6,11,16             # 关键帧（需要 huashu-motion 的 om CLI）
-om check  .                            # 结构 / 脚本 / 运动 / 文字检查
-om render . --fps 60                   # → out/*-v1.mp4
-```
+# ① 先看骨架自己能出什么（仓库里没有 index.html 在根目录，骨架在 assets/skeleton）
+om still  assets/skeleton --at 0.5,2,5,7.5     # 四张关键帧
+om render assets/skeleton --fps 60             # → assets/skeleton/out/*.mp4
 
-没有 `om`？页面暴露了 `window.film.seek(t)`，任何能截图的无头浏览器都能逐帧渲染
-（见 `references/04-timeline.md`），再用 ffmpeg 合成。
-
-想要一个干净的新工程：
-
-```bash
+# ② 开一个新工程，改成你的故事
 node scripts/new-film.mjs my-film --title "一只猫的春天"
+cd my-film
+om still  . --at 1,6,11,16
+om render . --fps 60                            # → out/my-film-v1.mp4
 ```
+
+> 没装 `om`（`huashu-motion` 的 CLI）也能出片：页面暴露了 `window.film.seek(t)`，
+> 任何能"seek + 截图"的无头浏览器都能逐帧渲染，再用 ffmpeg 合成
+> （见 `references/04-timeline.md`）。
+>
+> 想离线/可复现渲染：先 `node scripts/vendor-three.mjs .`，把 three + GSAP 冻结到 `vendor/`。
 
 ## 作为 agent skill 安装
 
@@ -85,9 +87,11 @@ references/
   05-sound-and-voice.md     配乐、音效打点、旁白与字幕
   06-review.md              冷审片流程 + 12 条验收 + 失败模式速查
 assets/
-  skeleton/                 ★ 能直接渲染的工程（18 秒示例片）
-    index.html              时间线 + draw(t) + 字幕层
-    lib3d.js                22KB 纯函数美术层
+  skeleton/                 ★ 能直接渲染的工程（8 秒示例片）
+    index.html              组装壳：时间线 + STORY 块 + 字幕 + 音效打点
+    world-kit.js            20KB 世界套件（window.WORLD_KIT）
+    ui.js / ui.css          2D 层：一个 UI.frame(t) 纯函数
+    README.md               四个文件怎么改
   beats-template.md         一页纸分镜表（复制填写）
 scripts/
   new-film.mjs              从骨架新建一个工程
@@ -120,3 +124,4 @@ examples/
 ## License
 
 MIT —— 用、改、商用都行，保留版权声明即可。见 [LICENSE](LICENSE)。
+第三方库（three.js / GSAP）的许可证与不重分发说明见 [THIRD_PARTY.md](THIRD_PARTY.md)。

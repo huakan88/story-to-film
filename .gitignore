@@ -8,6 +8,9 @@ out/
 vendor/
 **/vendor/
 
+# self-check stills (regenerate with `om still`)
+**/_selfcheck/
+
 # agent/tool noise
 .om/
 node_modules/

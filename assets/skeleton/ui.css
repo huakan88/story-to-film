@@ -1,0 +1,49 @@
+/* ui.css — the smallest 2D layer a story film needs: one caption, one HUD line.
+   Everything here is opacity/transform only; ui.js drives it from t, never from CSS animation. */
+
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #07080a; }
+
+#film {
+  position: relative; width: 100%; height: 100%; overflow: hidden; background: #07080a;
+  color: #f4efe6;
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+#ui { position: absolute; inset: 0; pointer-events: none; }
+
+/* a full-frame vignette: put decor under the type, never on top of it */
+#vig {
+  position: absolute; inset: 0;
+  background: radial-gradient(145% 105% at 50% 46%, #0000 44%, #00000059 78%, #000000ad 100%);
+}
+
+/* fade-in from black on the first beat */
+#veil { position: absolute; inset: 0; background: #050607; opacity: .9; }
+
+/* ---- caption: one line + one small line ------------------------------- */
+#cap { position: absolute; left: 0; right: 0; top: 44%; text-align: center; opacity: 0; }
+#cap::before {
+  content: ""; position: absolute; left: 20%; right: 20%; top: -58px; bottom: -58px; z-index: -1;
+  background: radial-gradient(56% 60% at 50% 50%, #00000099 0%, #0000004d 56%, #00000000 80%);
+}
+#cap .l1 {
+  font-size: 76px; font-weight: 900; letter-spacing: 4px; line-height: 1.22;
+  text-shadow: 0 6px 30px #000000cc, 0 18px 60px #00000099;
+}
+#cap .l2 {
+  margin-top: 16px; font-size: 26px; letter-spacing: 6px; opacity: .72;
+  text-shadow: 0 4px 20px #000000cc;
+}
+
+/* ---- hud: a small label, bottom left ---------------------------------- */
+#hud {
+  position: absolute; left: 72px; bottom: 56px;
+  font-size: 20px; letter-spacing: 7px; opacity: 0;
+  text-shadow: 0 2px 12px #000000cc;
+}
+#hud .dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: #c07c48; margin-right: 12px; vertical-align: middle;
+}

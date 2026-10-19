@@ -32,10 +32,10 @@ await cp(join(ROOT, 'assets', 'skeleton'), dest, {
 
 const indexPath = join(dest, 'index.html');
 let html = await readFile(indexPath, 'utf8');
+// the timeline key is read from data-composition-id at runtime, so renaming the id is enough
 html = html
   .replace(/data-composition-id="[^"]*"/, `data-composition-id="${name}"`)
-  .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
-  .replace(/window\.__timelines\['story-to-film-skeleton'\]/g, `window.__timelines['${name}']`);
+  .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
 await writeFile(indexPath, html, 'utf8');
 
 console.log(`created ${dest}`);

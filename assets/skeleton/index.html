@@ -3,385 +3,350 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1920, height=1080">
-<title>story-to-film · 一颗种子，一座森林</title>
-
-<!-- the world kit: palette, character factory, voxel builder, props, camera paths, lights -->
-<script src="lib3d.js"></script>
+<title>story-to-film · skeleton</title>
 
 <!--
-  story-to-film skeleton
-  ======================
-  A story film is ONE paused GSAP timeline whose every frame is a pure function of time.
-  Edit the "STORY" block below (beats, camera keys, captions) — the machinery stays.
+  THE SKELETON — copy this folder, edit the STORY block, render.
+  8 s · 1920×1080 · 60 fps · three.js from a CDN with a fallback chain.
 
-  Render with:
-    om still  . --at 1,6,11,16        (stills; needs huashu-motion's `om`)
-    om render . --fps 60              (video + soundtrack)
-  No `om`? Any headless-Chrome frame renderer works: the page exposes window.film.seek(t).
-
-  Dependencies are loaded from a CDN with a fallback chain (jsDelivr → unpkg → local vendor).
-  Run `node scripts/vendor-three.mjs` to freeze them locally for offline/reproducible renders.
+  Files:  index.html (this) · world-kit.js (art layer) · ui.js / ui.css (2D layer)
+  Vendor: run `node scripts/vendor-three.mjs .` once so vendor/gsap.min.js exists.
+          three.js itself comes from a CDN (jsDelivr → unpkg → npmmirror → ./vendor/…).
 -->
 
-<style>
-  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #07080a; }
-  #film { position: relative; width: 100%; height: 100%; overflow: hidden; background: #07080a;
-          color: #f4efe6; font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
-  #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  #ui { position: absolute; inset: 0; pointer-events: none; }
-  #vig { position: absolute; inset: 0; background: radial-gradient(140% 100% at 50% 46%, #0000 42%, #00000066 80%, #000000b3 100%); }
-  /* a soft dark scrim behind the caption so it stays readable over bright scenes */
-  #cap { position: absolute; left: 0; right: 0; top: 46%; text-align: center; opacity: 0; }
-  #cap::before { content: ""; position: absolute; left: 12%; right: 12%; top: -70px; bottom: -70px;
-    background: radial-gradient(58% 62% at 50% 50%, #000000b8 0%, #00000059 58%, #00000000 78%); z-index: -1; }
-  #cap .l1 { font-size: 92px; font-weight: 900; letter-spacing: 6px; line-height: 1.2;
-             text-shadow: 0 6px 30px #000000cc, 0 18px 60px #00000099; }
-  #cap .l2 { margin-top: 18px; font-size: 34px; letter-spacing: 5px; opacity: .78;
-             text-shadow: 0 4px 20px #000000cc; }
-  #kicker { position: absolute; left: 96px; bottom: 78px; font-size: 24px; letter-spacing: 8px; opacity: .55; }
-</style>
+<!-- GSAP is loaded inside the boot promise: vendor/ first, then a pinned CDN (see §0). -->
+<script src="world-kit.js"></script>
+<script src="ui.js"></script>
+<link rel="stylesheet" href="ui.css">
 </head>
 <body>
-<div id="film" data-composition-id="story-to-film-skeleton" data-width="1920" data-height="1080"
-     data-fps="60" data-duration="18">
+<div id="film" data-composition-id="skeleton" data-width="1920" data-height="1080"
+     data-fps="60" data-duration="8">
   <canvas id="gl" width="1920" height="1080"></canvas>
   <div id="ui">
     <div id="vig"></div>
-    <div id="cap"><div class="l1">一颗种子，一座森林。</div><div class="l2">ONE SEED. ONE FOREST.</div></div>
-    <div id="kicker">STORY-TO-FILM</div>
+    <div id="veil"></div>
+    <div id="cap">
+      <div class="l1">把这里换成你的故事。</div>
+      <div class="l2">REPLACE THIS LINE</div>
+    </div>
+    <div id="hud"><span class="dot"></span><span class="t">STORY-TO-FILM · SKELETON</span></div>
   </div>
 </div>
 
 <script type="module">
-/* ------------------------------------------------------------------ *
- * 0. dependencies — pinned versions, CDN first, local vendor last
- * ------------------------------------------------------------------ */
-const THREE_CDN = [
+/* ==================================================================== *
+ * 0 · dependencies — pinned version, CDN with a fallback chain
+ * ==================================================================== */
+// three.js is bundled (MIT, 718 KB) so a fresh clone renders offline with no setup:
+//   ./three/three.module.min.js  (imports ./three/three.core.min.js next to it)
+// If that copy is missing, the CDNs below are raced in parallel.
+const VENDOR_SOURCE = './three/three.module.min.js';
+const CDN_SOURCES = [
   'https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.min.js',
   'https://unpkg.com/three@0.181.2/build/three.module.min.js',
   'https://cdn.npmmirror.com/packages/three/0.181.2/files/build/three.module.min.js',
-  './vendor/three.module.min.js',
 ];
+const SOURCE_TIMEOUT = 12000;
+const withTimeout = (p, ms) => Promise.race([
+  p,
+  new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms)),
+]);
+async function loadThree() {
+  // A prepared project loads from disk: no network, no failed requests, instant boot.
+  try {
+    return { mod: await import(VENDOR_SOURCE), url: 'vendor' };
+  } catch (e) { /* not prepared — fall through to the CDNs */ }
+
+  // Otherwise race the CDNs: in parallel the cost is "the fastest healthy mirror",
+  // while a serial chain would multiply the wait by the number of dead sources.
+  const attempts = CDN_SOURCES.map((url) =>
+    withTimeout(import(url), SOURCE_TIMEOUT).then((mod) => ({ mod, url })));
+  try {
+    return await Promise.any(attempts);
+  } catch (e) {
+    const detail = (e && e.errors ? e.errors : [e]).map((x) => String(x && x.message || x)).join(' | ');
+    throw new Error('three.js unavailable — ' + detail + ' (run: node scripts/vendor-three.mjs .)');
+  }
+}
+
+/* gsap: a pinned CDN copy first (keeps the repository free of a non-OSI license),
+   then the local vendored copy written by `node scripts/vendor-three.mjs .` */
 const GSAP_CDN = [
   'https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js',
   'https://unpkg.com/gsap@3.12.5/dist/gsap.min.js',
-  './vendor/gsap.min.js',
+  'https://cdn.npmmirror.com/packages/gsap/3.12.5/files/dist/gsap.min.js',
 ];
-const loadScript = (url) => new Promise((res, rej) => {
-  const s = document.createElement('script');
-  s.src = url; s.onload = res; s.onerror = () => rej(new Error('script ' + url));
-  document.head.appendChild(s);
-});
-async function firstOf(list, run) {
+// built at runtime so a checkout without vendor/ has no dangling file reference
+const GSAP_LOCAL = ['', 'vendor', 'gsap.min.js'].join('/');
+function injectScript(src, timeout = 12000) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    const timer = setTimeout(() => { s.remove(); rej(new Error('timeout ' + src)); }, timeout);
+    s.async = true;
+    s.src = src;
+    s.onload = () => { clearTimeout(timer); res(src); };
+    s.onerror = () => { clearTimeout(timer); s.remove(); rej(new Error('failed ' + src)); };
+    document.head.appendChild(s);
+  });
+}
+async function loadGsap() {
+  if (window.gsap) return 'preloaded';
   const errors = [];
-  for (const url of list) {
-    try { return await run(url); } catch (e) { errors.push(String(e.message || e)); }
+  for (const url of [...GSAP_CDN, GSAP_LOCAL]) {
+    try {
+      await injectScript(url);
+      if (window.gsap) return url;
+    } catch (e) { errors.push(e.message); }
   }
-  throw new Error('all sources failed: ' + errors.join(' | '));
+  throw new Error('gsap unavailable — ' + errors.join(' | ') + ' (offline? run: node scripts/vendor-three.mjs .)');
 }
 
-/* ------------------------------------------------------------------ *
- * 1. STORY — the only block a story film really edits.
- *    Beats are verbs. If a beat cannot be seen, it is not a beat.
- * ------------------------------------------------------------------ */
-const STORY = {
-  duration: 18,
-  beats: [
-    { id: 'seed',   in: 0.00, what: 'a seed falls into dark soil' },
-    { id: 'sprout', in: 2.60, what: 'a sprout pushes up, two leaves unfold' },
-    { id: 'hills',  in: 6.40, what: 'the ground swells into soft mounds' },
-    { id: 'bloom',  in: 8.60, what: 'grass tufts and flowers pop one by one' },
-    { id: 'forest', in: 10.60, what: 'a forest rises, near to far' },
-    { id: 'night',  in: 14.40, what: 'dusk falls, stars and fireflies appear' },
-  ],
-  // Camera keys: pos = eye, look = target, fov optional. Eased between neighbours, pure in t.
-  camera: [
-    { t: 0.0,  pos: [3.10, 1.35, 4.20], look: [0, 0.20, 0], fov: 32 },
-    { t: 2.6,  pos: [2.70, 1.05, 3.60], look: [0, 0.30, 0], fov: 32 },
-    { t: 6.4,  pos: [3.40, 1.75, 4.80], look: [0, 0.40, 0], fov: 34 },
-    { t: 10.6, pos: [5.20, 2.40, 7.40], look: [0, 0.70, 0], fov: 40 },
-    { t: 14.4, pos: [6.60, 3.20, 9.00], look: [0, 0.90, 0], fov: 42 },
-    { t: 18.0, pos: [8.20, 4.20, 11.00], look: [0, 1.10, 0], fov: 40 },
-  ],
-  caption: { in: 15.5, out: 18.0 },
+const hudText = (msg, bad) => {
+  const hud = document.getElementById('hud');
+  if (!hud) return;
+  hud.style.opacity = '1';
+  hud.querySelector('.t').textContent = msg;
+  if (bad) hud.querySelector('.dot').style.background = '#d9534f';
+};
+const fail = (msg) => {
+  hudText(msg, true);
+  const veil = document.getElementById('veil');
+  if (veil) veil.style.opacity = '0.75';
+  throw new Error(msg);
 };
 
-/* ------------------------------------------------------------------ *
- * 2. build the world once (deterministic: seeded RNG, no Date.now)
- * ------------------------------------------------------------------ */
-const W = 1920, H = 1080;
-const rnd = LIB3D.rand(20261019);
-let camPath = null; // set after THREE loads (needs THREE)
+/* ==================================================================== *
+ * 1 · STORY — the only block a film really edits.
+ *     Every beat is a VERB you can see. Camera keys are pure data.
+ * ==================================================================== */
+const STORY = {
+  duration: 8,
+  camera: [
+    { t: 0.0, pos: [4.60, 2.60, 6.40], look: [0, 0.80, 0], fov: 34 },
+    { t: 2.4, pos: [3.80, 2.00, 5.40], look: [0, 0.80, 0], fov: 33 },
+    { t: 4.2, pos: [3.90, 2.10, 5.50], look: [0, 1.10, 0], fov: 34 },
+    { t: 6.2, pos: [5.40, 2.90, 7.40], look: [0, 1.20, 0], fov: 36 },
+    { t: 8.0, pos: [6.60, 3.50, 9.00], look: [0, 1.20, 0], fov: 36 },
+  ],
+  beats: {
+    lightsUp: [0.30, 1.40],  // the scene comes up out of black
+    walkIn: [0.90, 2.40],    // the character crosses the frame
+    stem: [2.00, 3.20],      // a thin stem pushes up
+    leaves: [2.70, 4.00],    // two leaves unfold — readable as a sprout
+    tree: [3.90, 6.00],      // the sprout becomes a pine
+    glow: [5.60, 6.60],      // it is finished: something lights up
+  },
+};
+
+/* ==================================================================== *
+ * 2 · boot: fetch three, build the world once, hand back draw(t)
+ * ==================================================================== */
+let draw = null;
 
 const boot = (async () => {
-  const THREE = await firstOf(THREE_CDN, (u) => import(u));
-  await firstOf(GSAP_CDN, (u) => loadScript(u));
-  const gsap = window.gsap;
-  const L = LIB3D;
+  // ---- three, from whichever source answers first -------------------------
+  const { mod: THREE, url: usedSource } = await loadThree();
+  if (!THREE) fail('three.js unavailable');
 
-  const renderer = L.makeRenderer(THREE, document.getElementById('gl'), { width: W, height: H });
+  const K = window.WORLD_KIT;
+  if (!K) fail('world-kit.js missing');
+  if (!window.UI) fail('ui.js missing');
+
+  const W = 1920, H = 1080;
+  const renderer = K.makeRenderer(THREE, document.getElementById('gl'), { width: W, height: H });
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0d10);
-  scene.fog = new THREE.Fog(0x0a0d10, 14, 42);
+  scene.background = new THREE.Color(0x080a0d);
+  scene.fog = new THREE.Fog(0x080a0d, 18, 48);
+
   const camera = new THREE.PerspectiveCamera(34, W / H, 0.05, 300);
-  const rig = L.lightRig(THREE, scene, { shadowSize: 9, shadowMap: 2048, key: 2.6, hemi: 0.75 });
-  rig.key.shadow.normalBias = 0.5;
-  rig.key.shadow.bias = -0.002;
+  const rig = K.lightRig(THREE, scene, { shadowSize: 8, shadowMap: 2048, key: 2.2, hemi: 0.85, rim: 0.5 });
 
-  // ---- the world is a diorama island: a soil cylinder with a grass cap on top ----
-  const ground = new THREE.Mesh(
-    new THREE.CylinderGeometry(5.1, 4.55, 1.5, 56),
-    L.mat(THREE, 0x33241b, { roughness: 1 })
-  );
-  ground.position.y = -0.60;
-  ground.receiveShadow = true;
-  ground.castShadow = false;
-  scene.add(ground);
+  // ---- world -------------------------------------------------------------
+  const rnd = K.rand(20261019);
+  const TOP = 0.2; // grass surface height
 
-  // ---- the seed ----
-  const seed = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 1), L.mat(THREE, 0x6b4a2f, { flat: true, roughness: .95 }));
-  seed.castShadow = true;
-  scene.add(seed);
+  scene.add(K.ground(THREE, { size: 4.6 }));
+  const sky = K.skyDome(THREE, { r: 120, top: K.PAL.skyTop, bottom: K.PAL.skyBottom });
+  scene.add(sky.mesh);
+  scene.add(K.sunOrMoon(THREE, { x: -17, y: 8.5, z: -21, size: 4.8 }));
+  scene.add(K.clouds(THREE, { count: 5, y: 26, spread: 120, rand: rnd }));
 
-  // ---- the sprout: stem + two leaves ----
+  const stars = K.stars(THREE, 500, 90, rnd);
+  stars.material.opacity = 0;   // daytime by default; raise it for a night beat
+  scene.add(stars);
+
+  // props: kept BEHIND the subject (the camera sits at +x/+z) so they frame it, never hide it
+  for (let i = 0; i < 3; i++) {
+    const a = 2.15 + i * 0.95;                 // back-left → back-right
+    const r = 3.0 + rnd() * 0.7;
+    const tree = K.pine(THREE, { h: 1.0 + rnd() * 0.45, rand: rnd });
+    tree.position.set(Math.cos(a) * r, TOP, Math.sin(a) * r);
+    tree.rotation.y = rnd() * Math.PI;
+    scene.add(tree);
+  }
+  for (let i = 0; i < 2; i++) {
+    const a = 2.6 + i * 1.3, r = 2.7 + rnd() * 0.8;
+    const b = K.bush(THREE, { h: 0.9 + rnd() * 0.3, rand: rnd });
+    b.position.set(Math.cos(a) * r, TOP, Math.sin(a) * r);
+    scene.add(b);
+  }
+
+  // ---- the thing that grows: a stem with two leaves, then a pine ---------
   const sprout = new THREE.Group();
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.045, 1, 7), L.mat(THREE, 0x5a8a3c, { flat: true }));
+  sprout.position.set(0, TOP, 0);
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.026, 0.042, 1, 6),
+    K.mat(THREE, 0x5a8a3c, { flat: true, roughness: 0.95 })
+  );
   stem.position.y = 0.5;
   stem.castShadow = true;
   sprout.add(stem);
-  const leaves = [];
-  for (const s of [-1, 1]) {
-    const leaf = new THREE.Mesh(L.roundBox(THREE, 0.26, 0.07, 0.13, 0.035, 2), L.mat(THREE, 0x6ea94a, { flat: true }));
-    leaf.position.set(s * 0.14, 0.80, 0);
+  const leaves = [-1, 1].map((s) => {
+    const leaf = new THREE.Mesh(
+      K.roundBox(THREE, 0.30, 0.07, 0.14, 0.035, 2),
+      K.mat(THREE, K.PAL.grassLight, { flat: true, roughness: 0.9 })
+    );
+    leaf.position.set(s * 0.15, 0.80, 0);
     leaf.rotation.z = s * -0.72;
     leaf.castShadow = true;
     sprout.add(leaf);
-    leaves.push(leaf);
-  }
+    return leaf;
+  });
   scene.add(sprout);
 
-  // ---- the living ground: a grass disc plus a few voxel rocks, growing as one group ----
-  const hillsGroup = new THREE.Group();
-  const grass = new THREE.Mesh(
-    new THREE.CylinderGeometry(5.02, 5.3, 0.2, 56),
-    L.mat(THREE, 0x4f7c33, { roughness: 1 })
-  );
-  grass.position.y = 0.10;
-  grass.receiveShadow = true;
-  hillsGroup.add(grass);
-  for (let i = 0; i < 6; i++) {
-    const v = L.Vox(THREE);
-    const w = 0.28 + rnd() * 0.3;
-    v.box(0, 0, 0, w, 0.22 + rnd() * 0.2, w * 0.9, [0x8b7a63, 0x9a866c, 0x6f5f4a][i % 3], { jitter: 0.14, rand: rnd });
-    const rock = new THREE.Mesh(v.build(), L.voxMaterial(THREE));
-    const a = rnd() * Math.PI * 2, r = 1.6 + rnd() * 3.2;
-    rock.position.set(Math.cos(a) * r, 0.16, Math.sin(a) * r);
-    rock.rotation.y = rnd() * Math.PI;
-    rock.castShadow = true; rock.receiveShadow = true;
-    hillsGroup.add(rock);
-  }
-  scene.add(hillsGroup);
+  const tree = K.pine(THREE, { h: 2.4, rand: rnd });
+  tree.position.set(0, TOP, 0);
+  tree.scale.setScalar(0.001);
+  scene.add(tree);
 
-  // ---- forest: one merged voxel pine, instanced (1 draw call) ----
-  const pineVox = L.Vox(THREE);
-  pineVox.box(0, 0.28, 0, 0.10, 0.56, 0.10, 0x5b4433, { jitter: 0.08, rand: rnd });
-  const tiers = [[0.34, 0.46, 0.52, 0x2f7a3d], [0.26, 0.42, 0.86, 0x3c8f46], [0.18, 0.38, 1.16, 0x245f33]];
-  for (const [w, h, y, c] of tiers) pineVox.box(0, y, 0, w, h, w, c, { jitter: 0.1, rand: rnd });
-  pineVox.box(0, 1.54, 0, 0.08, 0.24, 0.08, 0x245f33);
-  const pineGeo = pineVox.build();
-  const TREES = 56;
-  const trees = new THREE.InstancedMesh(pineGeo, L.voxMaterial(THREE), TREES);
-  trees.castShadow = true;
-  trees.receiveShadow = true;
-  scene.add(trees);
-  const treeDefs = [];
-  for (let i = 0; i < TREES; i++) {
-    const a = rnd() * Math.PI * 2;
-    const ring = 1.5 + rnd() * 3.4;          // near the seed first, then outward
-    const s = 0.62 + rnd() * 0.55;
-    treeDefs.push({
-      x: Math.cos(a) * ring, z: Math.sin(a) * ring, y: 0.16,
-      s, rot: rnd() * Math.PI * 2,
-      birth: 10.6 + (ring - 1.5) * 0.8 + rnd() * 0.35,   // near → far, so growth reads
-    });
-  }
-  treeDefs.sort((a, b) => a.birth - b.birth);
+  const glow = K.glowSprite(THREE, K.PAL.sun, 0.9, { soft: true, opacity: 0 });
+  glow.position.set(0, TOP + 2.3, 0);
+  scene.add(glow);
 
-  // ---- grass tufts + flowers: two instanced meshes ----
-  const tuftGeo = new THREE.ConeGeometry(0.05, 0.22, 4);
-  tuftGeo.translate(0, 0.11, 0);
-  const tufts = new THREE.InstancedMesh(tuftGeo, L.mat(THREE, 0x7cb04a, { flat: true }), 150);
-  scene.add(tufts);
-  const flowerGeo = new THREE.IcosahedronGeometry(0.05, 0);
-  const flowers = new THREE.InstancedMesh(flowerGeo, L.mat(THREE, 0xf0c26a, { flat: true }), 60);
-  scene.add(flowers);
-  const tuftDefs = [], flowerDefs = [];
-  for (let i = 0; i < 150; i++) {
-    const a = rnd() * Math.PI * 2, r = 0.35 + rnd() * 4.6;
-    tuftDefs.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, s: 0.6 + rnd() * 0.9, birth: 8.6 + rnd() * 2.2 });
-  }
-  for (let i = 0; i < 60; i++) {
-    const a = rnd() * Math.PI * 2, r = 0.5 + rnd() * 4.2;
-    flowerDefs.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, s: 0.6 + rnd() * 0.8, birth: 9.2 + rnd() * 2.4 });
-  }
-
-  // ---- sky, stars, fireflies ----
-  const sky = L.skyDome(THREE, { r: 120, top: 0x6ea3cf, bottom: 0xf2e2c8 });
-  scene.add(sky.mesh);
-  const sun = L.glowSprite(THREE, 0xffe0b0, 4.6, { soft: true });
-  sun.position.set(-14, 4.6, -19);
-  scene.add(sun);
-  const stars = L.stars(THREE, 700, 90, rnd);
-  scene.add(stars);
-  const flyTex = L.glowTexture(THREE, 0xffe6a0, true);
-  const flyGeo = new THREE.BufferGeometry();
-  const flyPos = new Float32Array(40 * 3);
-  flyGeo.setAttribute('position', new THREE.BufferAttribute(flyPos, 3));
-  const flies = new THREE.Points(flyGeo, new THREE.PointsMaterial({
-    map: flyTex, size: 0.34, transparent: true, opacity: 0, depthWrite: false,
-    blending: THREE.AdditiveBlending, sizeAttenuation: true,
-  }));
-  scene.add(flies);
-
-  // ---- the witness: a small character watching the world arrive ----
-  const hero = L.mascot(THREE, { scale: 0.5 });
-  hero.group.position.set(-1.85, 0.16, 1.35);
-  hero.group.rotation.y = 2.05;
+  // ---- the character -----------------------------------------------------
+  const hero = K.mascot(THREE, { scale: 0.5 });
+  hero.group.position.set(-1.7, TOP, 1.5);
   scene.add(hero.group);
 
-  camPath = L.camPath(THREE, STORY.camera);
+  const camPath = K.camPath(THREE, STORY.camera);
 
   /* ---------------------------------------------------------------- *
-   * 3. one pure function of t: every frame is rebuilt from time alone
+   * 3 · draw(t): pure function of time. No clocks, no unseeded random.
    * ---------------------------------------------------------------- */
-  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), V = new THREE.Vector3(), S = new THREE.Vector3();
-  const AXIS_Y = new THREE.Vector3(0, 1, 0);
-  const put = (mesh, i, x, y, z, sx, sy, sz, rotY) => {
-    Q.setFromAxisAngle(AXIS_Y, rotY || 0);
-    V.set(x, y, z); S.set(sx, sy, sz);
-    M.compose(V, Q, S);
-    mesh.setMatrixAt(i, M);
-  };
+  const B = STORY.beats;
 
-  function draw(t) {
-    const L2 = LIB3D;
-    // --- sky / dusk (a warm rim keeps the island readable after dark) ---
-    const dusk = L2.smoothSeg(t, 14.4, 17.6);
-    sky.mat.uniforms.night.value = dusk;
-    rig.key.intensity = 2.6 * (1 - dusk * 0.55);
-    rig.hemi.intensity = 0.75 * (1 - dusk * 0.18);
-    rig.rim.intensity = 0.45 + dusk * 1.1;
-    scene.fog.color.setRGB(0.05 + 0.04 * (1 - dusk), 0.06 + 0.04 * (1 - dusk), 0.07 + 0.05 * (1 - dusk));
-    stars.material.opacity = L2.seg(t, 15.0, 17.4) * 0.95;
+  draw = function (t) {
+    // lights come up out of black
+    // never a fully black first frame: a sliver of light is already on at t=0
+    const lit = 0.18 + 0.82 * K.easeOut(K.seg(t, B.lightsUp[0], B.lightsUp[1]));
+    rig.key.intensity = 2.2 * lit;
+    rig.hemi.intensity = 0.85 * lit;
+    rig.rim.intensity = 0.5 * lit;
 
-    // --- seed: falls, bounces, is gone once the sprout takes over ---
-    const fall = L2.seg(t, 0.55, 1.15);
-    const bounce = Math.sin(Math.PI * L2.clamp((t - 1.15) / 0.45)) * 0.10;
-    seed.position.set(0, L2.lerp(2.4, 0.18, L2.easeInOut(fall)) + bounce, 0);
-    seed.rotation.set(t * 2.1, t * 1.3, 0);
-    seed.scale.setScalar(1 - L2.seg(t, 2.45, 2.75) * 0.92);
+    // the character walks in, then idles facing the sprout
+    const w = K.seg(t, B.walkIn[0], B.walkIn[1]);
+    const walking = w > 0 && w < 1;
+    hero.group.position.x = K.lerp(-1.75, -0.65, K.easeInOut(w));
+    hero.group.position.z = 1.5;
+    hero.pose({
+      walk: walking ? t * 1.7 : 0,
+      bob: walking ? Math.abs(Math.sin(t * 11)) * 0.02 : Math.sin(t * 1.6) * 0.006,
+      // 3/4 toward camera, turning a little more toward the sprout as it arrives
+      look: K.lerp(0.55, 0.95, K.easeOut(w)),
+    });
 
-    // --- sprout: spring up, leaves unfold ---
-    const grow = L2.spring(L2.seg(t, 2.62, 4.10), 0.16);
-    sprout.position.y = 0.16;
-    sprout.scale.set(1, Math.max(0.001, grow), 1);
-    sprout.rotation.y = 0.35 + Math.sin(t * 0.9) * 0.05;
+    // stage 1: the stem pushes up, two leaves unfold
+    const stemK = K.spring(K.seg(t, B.stem[0], B.stem[1]), 0.16);
+    sprout.scale.set(1, Math.max(0.001, stemK), 1);
     leaves.forEach((leaf, i) => {
-      const k = L2.spring(L2.seg(t, 3.30 + i * 0.22, 4.30 + i * 0.22), 0.22);
+      const k = K.spring(K.seg(t, B.leaves[0] + i * 0.16, B.leaves[1] + i * 0.16), 0.24);
       leaf.scale.set(k, k, k);
-      leaf.rotation.z = (i ? 1 : -1) * (0.9 - 0.45 * k);
+      leaf.rotation.z = (i ? 1 : -1) * (0.86 - 0.5 * k);
     });
 
-    // --- the ground becomes living: the grass disc and rocks swell ---
-    const hillK = L2.spring(L2.seg(t, 6.4, 9.0), 0.14);
-    hillsGroup.scale.set(Math.max(0.001, hillK), Math.max(0.001, hillK), Math.max(0.001, hillK));
-    hillsGroup.visible = hillK > 0.002;
+    // stage 2: the sprout becomes a pine (hand off without a pop)
+    const treeK = K.spring(K.seg(t, B.tree[0], B.tree[1]), 0.14);
+    tree.scale.setScalar(Math.max(0.001, treeK));
+    tree.visible = treeK > 0.002;
+    const handOff = K.seg(t, B.tree[0], B.tree[0] + 0.9);
+    sprout.visible = treeK < 0.9;
+    sprout.scale.x = 1 - handOff * 0.6;
+    sprout.scale.z = 1 - handOff * 0.6;
 
-    // --- grass and flowers pop in ---
-    tuftDefs.forEach((d, i) => {
-      const k = L2.spring(L2.seg(t, d.birth, d.birth + 0.55), 0.3);
-      put(tufts, i, d.x, 0.16 * hillK, d.z, d.s * k, d.s * k, d.s * k, i * 0.7);
-    });
-    tufts.instanceMatrix.needsUpdate = true;
-    flowerDefs.forEach((d, i) => {
-      const k = L2.spring(L2.seg(t, d.birth, d.birth + 0.5), 0.34);
-      put(flowers, i, d.x, 0.16 * hillK + 0.10 * k, d.z, k, k, k, i);
-    });
-    flowers.instanceMatrix.needsUpdate = true;
+    // it is finished: a warm glow at the top
+    const glowK = K.seg(t, B.glow[0], B.glow[1]);
+    glow.material.opacity = glowK * 0.75;
+    glow.scale.setScalar(0.9 + glowK * 0.6);
+    glow.position.y = TOP + 2.4 * Math.min(1, treeK) + 0.12;
 
-    // --- forest: near to far ---
-    treeDefs.forEach((d, i) => {
-      const k = L2.spring(L2.seg(t, d.birth, d.birth + 0.75), 0.2);
-      put(trees, i, d.x, d.y * hillK, d.z, d.s * k, d.s * k, d.s * k, d.rot);
-    });
-    trees.instanceMatrix.needsUpdate = true;
-
-    // --- fireflies drift in at dusk ---
-    const flyOn = L2.seg(t, 15.2, 16.8);
-    flies.material.opacity = flyOn * 0.9;
-    for (let i = 0; i < 40; i++) {
-      const a = i * 2.399 + t * 0.22;
-      const r = 1.2 + (i % 7) * 0.45;
-      flyPos[i * 3] = Math.cos(a) * r;
-      flyPos[i * 3 + 1] = 0.5 + Math.sin(t * 0.7 + i) * 0.28 + (i % 5) * 0.12;
-      flyPos[i * 3 + 2] = Math.sin(a) * r;
-    }
-    flyGeo.attributes.position.needsUpdate = true;
-
-    // --- the witness: idle, then looks up at the trees ---
-    hero.pose({ walk: 0, bob: Math.sin(t * 1.6) * 0.006, look: -0.9 + L2.seg(t, 11.0, 13.0) * 0.5 });
-
-    // --- camera ---
+    // camera
     camPath(camera, t);
 
-    // --- captions (DOM, also a function of t) ---
-    const capIn = L2.seg(t, STORY.caption.in, STORY.caption.in + 0.9);
-    cap.style.opacity = String(capIn);
-    cap.querySelector('.l1').style.transform = 'translateY(' + L2.lerp(22, 0, L2.easeOut(capIn)) + 'px)';
-    cap.querySelector('.l2').style.opacity = String(L2.seg(t, STORY.caption.in + 0.5, STORY.caption.in + 1.4) * 0.78);
-    kicker.style.opacity = String(0.55 * (1 - L2.seg(t, 1.6, 2.4)) + 0.0);
+    // 2D layer (captions)
+    window.UI.frame(t);
 
     renderer.render(scene, camera);
-  }
+  };
 
-  const cap = document.getElementById('cap');
-  const kicker = document.getElementById('kicker');
-
-  /* ---------------------------------------------------------------- *
-   * 4. one paused timeline drives everything; the duration is the story
-   * ---------------------------------------------------------------- */
-  const tl = gsap.timeline({ paused: true });
-  const proxy = { t: 0 };
-  Object.defineProperty(proxy, 't', { get: () => proxy._t || 0, set: (v) => { proxy._t = v; draw(v); } });
-  tl.fromTo(proxy, { t: 0 }, { t: STORY.duration, duration: STORY.duration, ease: 'none', immediateRender: false }, 0);
+  window.UI.mount({ duration: STORY.duration, captionIn: 5.9, captionInEnd: 6.5 });
   draw(0);
+})().catch((e) => {
+  const msg = String((e && e.message) || e);
+  hudText('boot failed: ' + msg, true);
+  throw e;
+});
+
+/* ==================================================================== *
+ * 4 · one paused timeline drives everything; the duration is the story
+ * ==================================================================== */
+const film = document.getElementById('film');
+const composeId = film.dataset.compositionId;
+const DURATION = Number(film.dataset.duration) || STORY.duration;
+
+const ready = boot.then(async () => {
+  await loadGsap();
+  const tl = window.gsap.timeline({ paused: true });
+  const proxy = { t: 0 };
+  Object.defineProperty(proxy, 't', {
+    get: () => proxy._t || 0,
+    set: (v) => { proxy._t = v; draw(v); },
+  });
+  tl.fromTo(proxy, { t: 0 }, { t: DURATION, duration: DURATION, ease: 'none', immediateRender: false }, 0);
+
+  // scene labels: they are the soundtrack's sections and your own rhythm sheet
+  tl.addLabel('scene:open', 0)
+    .addLabel('scene:sprout', STORY.beats.stem[0])
+    .addLabel('scene:tree', STORY.beats.tree[0])
+    .addLabel('scene:reveal', STORY.beats.glow[0])
+    .addLabel('scene:end', 6.4);
 
   window.__timelines = window.__timelines || {};
-  window.__timelines[document.getElementById('film').dataset.compositionId] = tl;
+  window.__timelines[composeId] = tl;
 
-  // for renderers that are not huashu-motion: seek to any time and get that frame
+  // any renderer that is not huashu-motion can drive the film through this
   window.film = {
-    tl,
-    duration: STORY.duration,
+    duration: DURATION,
     seek(t) { tl.pause(); tl.seek(t, false); draw(t); },
     draw,
     ready: true,
   };
 
-  // huashu-motion (om) hooks: soundtrack + effects are data, not audio files
+  // huashu-motion (om) hooks: sound is declared here, not placed in an editor
   if (window.OM && window.OM.music) {
-    window.OM.music({ product: 'explainer', style: 'mallet', ending: 'ring', bpm: 96 });
-    [[0.55, 'whoosh'], [1.15, 'thud'], [2.62, 'boing'], [6.4, 'riser', { dur: 1.6 }],
-     [8.6, 'pop'], [10.6, 'hit'], [14.4, 'subdrop'], [15.5, 'chime']].forEach(([t, n, o]) => window.OM.sfx(n, t, o));
+    window.OM.music({ product: 'explainer', style: 'mallet', bpm: 96, ending: 'ring',
+      energy: { open: 0.35, sprout: 0.62, tree: 0.78, reveal: 0.92, end: 0.5 } });
+    [[0.90, 'whoosh'], [2.00, 'riser', { dur: 1.2 }], [3.90, 'hit'], [5.60, 'chime'], [7.40, 'thud']]
+      .forEach(([t, name, opts]) => window.OM.sfx(name, t, opts));
   }
-})();
+  return true; // NOT the timeline: a GSAP timeline is thenable, and returning it into a
+});            // promise chain makes the promise wait for the animation to finish — it never does.
 
-// Tell any frame renderer (huashu-motion's om, or your own) to wait for the dependencies
-// before it samples a frame; then register the same promise with om's own hook.
+// tell every frame renderer to wait for the dependencies before sampling a frame
 window.__hf = window.__hf || {};
 window.__hf.buildReady = window.__hf.buildReady || {};
-window.__hf.buildReady['story-to-film:deps'] = boot;
-if (window.OM && window.OM.ready) window.OM.ready(boot);
+window.__hf.buildReady['skeleton:deps'] = ready;
+if (window.OM && window.OM.ready) window.OM.ready(ready);
 </script>
 </body>
 </html>

@@ -92,6 +92,9 @@ tl.addLabel('scene:hook', 0)
 | 第一帧黑屏 | 依赖没加载完就开始抓帧 | `__hf.buildReady` 注册 boot |
 | 静态帧（连续 1s 没变化） | 镜头/物体在某段没动 | 加微呼吸（1–2% 的缓慢变化） |
 | 物体闪一下消失 | `scale` 到 0 后又被另一个 keyframe 拉回 | 用 `visible = k > 0.002` 兜底 |
+| 渲染器 15s 后报 `the composition's ready promises did not finish` | **把 GSAP 时间线当成 promise 的返回值**（`tl` 是 thenable，Promise 会等它"播完"，而它是暂停的 → 永不 resolve） | 回调里 `return true`，绝不把 `tl` 返回进 promise 链 |
+| 首帧要等 10s+ 才出来 | CDN 兜底链**串行**尝试，等待被乘以源数量 | 三源 `Promise.any` 并行竞速；每源 8–12s 超时；本地 `vendor/` 放第一位 |
+
 
 ## 时长与帧率怎么选
 
