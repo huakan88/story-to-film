@@ -317,8 +317,8 @@ const boot = (async () => {
     // the character walks in, then idles facing the sprout
     const w = K.seg(t, B.walkIn[0], B.walkIn[1]);
     const walking = w > 0 && w < 1;
-    hero.group.position.x = K.lerp(-3.10, -2.60, K.easeInOut(w));
-    hero.group.position.z = 2.15;
+    hero.group.position.x = K.lerp(-1.55, -1.05, K.easeInOut(w));
+    hero.group.position.z = 1.85;
     hero.pose({
       walk: walking ? t * 1.7 : 0,
       bob: walking ? Math.abs(Math.sin(t * 11)) * 0.02 : Math.sin(t * 1.6) * 0.006,
