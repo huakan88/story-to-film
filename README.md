@@ -7,7 +7,7 @@
 
 ![demo sheet](examples/sheet.jpg)
 
-▶ [`examples/seed-to-forest.mp4`](examples/seed-to-forest.mp4) — 18 秒示例，就是 `assets/skeleton/` 原样渲染的（1.2 MB）
+▶ [`examples/seed-to-forest.mp4`](examples/seed-to-forest.mp4) — 18 秒示例，就是 `assets/skeleton/` 原样渲染的（约 700 KB）
 
 ---
 
@@ -48,7 +48,7 @@ git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-fi
 装好之后，当你说「把这段故事做成一条短片 / 做个构建片」，agent 会：
 
 1. 把故事改写成 8 拍（`references/01-story-to-beats.md`）
-2. 逐条翻译成叙事动作（`references/02-shot-grammar.md` 的 30 行动作字典）
+2. 逐条翻译成叙事动作（`references/02-shot-grammar.md` 的 22 行动作字典）
 3. 用 `assets/skeleton/` 搭世界，先做最难的镜头
 4. 冷审片（`references/06-review.md`），修一轮
 5. 出片、交付、写诚实清单
@@ -79,7 +79,7 @@ git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-fi
 SKILL.md                    agent 入口：触发条件 + 六阶段 + 五条铁律
 references/
   01-story-to-beats.md      故事 → 8 拍 + 能量曲线 + 时长预算
-  02-shot-grammar.md        ★ 叙事动作 → 镜头语法（30 行字典，本仓库的核心）
+  02-shot-grammar.md        ★ 叙事动作 → 镜头语法（22 行字典，本仓库的核心）
   03-world-kit.md           世界套件 API：角色工厂 / 体素 / 道具 / 相机 / 灯光 / 性能
   04-timeline.md            时间线契约、确定性、接 om、没 om 怎么渲染
   05-sound-and-voice.md     配乐、音效打点、旁白与字幕
