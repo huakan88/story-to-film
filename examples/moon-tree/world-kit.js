@@ -144,7 +144,11 @@
 
   // ---------------------------------------------------------------- mascot
   // A neutral little character: rounded body, two eyes, a nub on each side, four legs.
-  // pose({ walk, bob, jump, look, squash }) — the same call works for any character you swap in.
+  // pose({ walk, bob, jump, look, squash, crouch, sit, reach, eyes }) — the same call works for any
+  // character you swap in. crouch / sit / reach are pose offsets in 0..1 (0 = the neutral stand):
+  //   crouch — body drops and tips forward ("about to jump", "planting something")
+  //   sit    — body drops onto folded rear legs, front legs stay straight ("waiting")
+  //   reach  — body tips forward and the side nubs push forward/down ("press it into the soil")
   K.mascot = function (THREE, opts) {
     const o = opts || {};
     const s = o.scale == null ? 1 : o.scale;
@@ -167,10 +171,12 @@
     g.add(eyes);
 
     const nubMat = K.mat(THREE, o.color == null ? K.PAL.mascotDark : o.color, { roughness: 0.7 });
+    const nubs = [];
     for (const sx of [-0.52, 0.52]) {
       const nub = new THREE.Mesh(K.roundBox(THREE, 0.1, 0.1, 0.16, 0.04, 2), nubMat);
       nub.position.set(sx, 0.54, 0);
       g.add(nub);
+      nubs.push(nub);
     }
 
     const legs = [];
@@ -183,19 +189,41 @@
     }
     g.scale.setScalar(s);
 
-    const st = { walk: 0, bob: 0, jump: 0, look: 0, squash: 1 };
+    const st = { walk: 0, bob: 0, jump: 0, look: 0, squash: 1, crouch: 0, sit: 0, reach: 0, eyes: 1 };
     const pose = (p) => {
       Object.assign(st, p || {});
       const t = st.walk;
+      const crouch = K.clamp(st.crouch), sit = K.clamp(st.sit), reach = K.clamp(st.reach);
+      // body: the three offsets stack; all of them are pure functions of the pose values
+      const drop = crouch * 0.16 + sit * 0.26;
+      const tipFwd = crouch * 0.42 + reach * 0.5;
+      body.position.y = 0.56 - drop - reach * 0.04;
+      body.scale.set(1 + sit * 0.06, 1 - crouch * 0.18 - sit * 0.04, 1 + sit * 0.1);
       g.position.y = st.bob + st.jump - (1 - st.squash) * 0.25;
       g.rotation.y = st.look;
+      g.rotation.x = tipFwd;
       g.rotation.z = Math.sin(t * Math.PI * 2) * 0.03;
       g.scale.set(s * (2 - st.squash), s * st.squash, s * (2 - st.squash));
       legs.forEach((leg, i) => {
         const ph = t * Math.PI * 2 + (i % 2 ? Math.PI : 0) + (i < 2 ? 0 : Math.PI);
-        leg.position.y = 0.12 + Math.max(0, Math.sin(ph)) * 0.05;
-        leg.position.z = (i % 2 === 0 ? -0.16 : 0.16) + Math.cos(ph) * 0.03;
+        const rear = i % 2 === 0;
+        // sitting folds the rear legs under the body and keeps the front pair straight
+        const fold = sit * (rear ? 1 : 0.15);
+        leg.position.y = (0.12 + Math.max(0, Math.sin(ph)) * 0.05) * (1 - fold * 0.7) - fold * 0.02;
+        leg.position.z = (rear ? -0.16 : 0.16) + Math.cos(ph) * 0.03 + fold * 0.06;
+        leg.position.x = (i < 2 ? -0.24 : 0.24) * (1 - sit * 0.18);
+        leg.scale.y = 1 - crouch * 0.22 - fold * 0.45;
       });
+      // the nubs are this character's hands: reaching pushes them forward and down
+      nubs.forEach((nub) => {
+        nub.position.z = -0.02 + reach * 0.26;
+        nub.position.y = 0.54 - drop * 0.7 - reach * 0.16;
+        nub.rotation.x = -reach * 0.7;
+      });
+      // eyes: 1 = open, →0 = shut (a blink is just a value you pass in)
+      const eyesOpen = K.clamp(st.eyes, 0.02, 1);
+      eyes.scale.y = eyesOpen;
+      eyes.position.y = -drop * 0.9;
     };
     pose({});
     return { group: g, pose, body, eyes };
@@ -309,6 +337,7 @@
     return g;
   };
   // A stack of blocks — the simplest "something grows here" object. Scale the group in y.
+  // Kept for compatibility; `K.stack` (below) is the same idea with per-block timing and collapse.
   K.boxStack = function (THREE, opts) {
     const o = opts || {};
     const r = o.rand || K.rand(5);
@@ -330,6 +359,98 @@
     return g;
   };
   const L_BOX = (THREE, w, h, d) => new THREE.BoxGeometry(w, h, d);
+
+  // A per-block stack: each block has its own birth (it drops in and bounces once), and the whole
+  // stack can collapse at `collapseAt` (each block gets its own launch velocity, spin and fall).
+  // This is the factory behind the grammar's "堆叠 / 砌" and "裂开 / 断裂" rows.
+  //   const tower = K.stack(T, { count: 12, size: 0.42, layers: 1, birth: [2.0, 3.6], collapseAt: 15 });
+  //   scene.add(tower.group);        // once
+  //   tower.setTime(t);              // every frame — pure in t, nothing accumulates
+  // opts: count | size | layers(blocks side by side) | birth(number|[start,end]|array) | fall(false|{height,gap,dur})
+  //       collapseAt | collapseDur | spread | colors | rand | restY(ground level, default 0)
+  K.stack = function (THREE, opts) {
+    const o = opts || {};
+    const r = o.rand || K.rand(17);
+    const n = Math.max(1, o.count == null ? 8 : o.count | 0);
+    const size = o.size == null ? 0.42 : o.size;
+    const perLayer = Math.max(1, o.layers == null ? 1 : o.layers | 0);
+    const h = size * 0.62;
+    const colors = o.colors || [K.PAL.rock, K.PAL.rockDark, K.PAL.grassLight];
+    const fall = o.fall === false ? null : Object.assign({ height: 1.6, gap: 0.34, dur: 0.5 }, o.fall || {});
+    const restY = o.restY == null ? 0 : o.restY;
+    const collapseAt = o.collapseAt == null ? null : o.collapseAt;
+    const collapseDur = o.collapseDur == null ? 1.4 : o.collapseDur;
+    const spread = o.spread == null ? 1.7 : o.spread;
+    const births = (() => {
+      if (Array.isArray(o.birth)) return (i) => (o.birth[i] == null ? o.birth[o.birth.length - 1] : o.birth[i]);
+      if (typeof o.birth === 'number') return (i) => o.birth + i * (fall ? fall.gap : 0);
+      const [a, b] = o.birth || [0, n * (fall ? fall.gap : 0)];
+      return (i) => K.lerp(a, b, n === 1 ? 0 : i / (n - 1));
+    })();
+
+    const group = new THREE.Group();
+    const blocks = [];
+    for (let i = 0; i < n; i++) {
+      const layer = Math.floor(i / perLayer);
+      const slot = i % perLayer;
+      const baseX = (slot - (perLayer - 1) / 2) * size * 0.92 + (r() - 0.5) * 0.03;
+      const baseZ = (r() - 0.5) * 0.05;
+      const baseY = restY + h * (layer + 0.5);
+      const mesh = new THREE.Mesh(
+        L_BOX(THREE, size * (1 - layer * 0.04), h, size * (1 - layer * 0.04)),
+        K.mat(THREE, colors[Math.floor(r() * colors.length)], { flat: true, roughness: 0.95 })
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      group.add(mesh);
+      blocks.push({
+        mesh, baseX, baseY, baseZ,
+        birth: births(i),
+        yaw: (r() - 0.5) * 0.3,
+        vx: (r() - 0.5) * spread,
+        vz: (r() - 0.5) * spread,
+        vy: 0.9 + r() * 1.5,
+        spin: (r() - 0.5) * 7,
+        land: restY + h * 0.5,
+      });
+    }
+
+    function setTime(t) {
+      for (const b of blocks) {
+        const { mesh } = b;
+        if (t < b.birth) { mesh.visible = false; continue; }
+        mesh.visible = true;
+        const age = t - b.birth;
+        // 1. drop in: falls from `height` above its slot and settles with one small bounce
+        const k = fall ? K.clamp(age / fall.dur) : 1;
+        const dropY = fall ? fall.height * (1 - K.spring(k, 0.22)) : 0;
+        let x = b.baseX, y = b.baseY + Math.max(0, dropY), z = b.baseZ;
+        let rx = 0, rz = 0, ry = b.yaw;
+        let sy = 1;
+        if (fall && k < 1) sy = 1 + (1 - k) * 0.06;    // slight stretch while falling
+        // 2. collapse: launch, spin, fall under gravity, land and stay (all from c = t - collapseAt)
+        if (collapseAt != null && t > collapseAt) {
+          const c = Math.max(0, t - collapseAt);
+          const c1 = Math.min(c, collapseDur);
+          x = b.baseX + b.vx * c1;
+          z = b.baseZ + b.vz * c1;
+          const yFree = b.baseY + b.vy * c1 - 2.4 * c1 * c1;
+          const hit = Math.max(0, (b.baseY - b.land) / Math.max(0.001, b.vy)) + 0.18; // when it lands
+          const settled = c1 >= hit;
+          y = settled ? b.land : Math.max(b.land, yFree);
+          if (settled) sy = 1 - 0.18 * Math.max(0, 1 - (c1 - hit) * 6);   // squash on landing
+          rx = b.spin * c1 * (settled ? 0.35 : 1);
+          rz = (b.vx > 0 ? -1 : 1) * Math.min(0.9, c1 * 0.7) * (settled ? 1 : 0.6);
+          ry = b.yaw + b.spin * 0.4 * c1;
+        }
+        mesh.position.set(x, y, z);
+        mesh.rotation.set(rx, ry, rz);
+        mesh.scale.set(1, sy, 1);
+      }
+    }
+    setTime(0);
+    return { group, setTime, blocks };
+  };
 
   // ---------------------------------------------------------------- terrain & sky
   // A diorama island: soil cylinder + grass cap. size = top radius.
@@ -383,11 +504,38 @@
     return { mesh, mat };
   };
 
+  // The sun / moon: a soft halo PLUS a solid disc, wrapped in one Group so `scene.add(sun)` keeps
+  // working the way a bare glow sprite did. Move it with `sun.position` / `sun.setPosition(v)` — the
+  // whole thing travels together, which is what "the moon slides down to the treetop" needs.
+  //   const sun = K.sunOrMoon(T, { color, size, x, y, z, disc: true, discSize });
+  //   sun.setPosition(new T.Vector3(0.2, 5.2, -3));   sun.setIntensity(0.35);  // 0..1
   K.sunOrMoon = function (THREE, opts) {
     const o = opts || {};
-    const sp = K.glowSprite(THREE, o.color == null ? K.PAL.sun : o.color, o.size == null ? 4.6 : o.size, { soft: true });
-    sp.position.set(o.x == null ? -14 : o.x, o.y == null ? 4.6 : o.y, o.z == null ? -19 : o.z);
-    return sp;
+    const size = o.size == null ? 4.6 : o.size;
+    const color = o.color == null ? K.PAL.sun : o.color;
+    const group = new THREE.Group();
+    const glow = K.glowSprite(THREE, color, size, { soft: true });
+    group.add(glow);
+    let disc = null;
+    if (o.disc !== false) {
+      disc = new THREE.Mesh(
+        new THREE.CircleGeometry(o.discSize == null ? size * 0.17 : o.discSize, 40),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false })
+      );
+      disc.position.z = 0.01;                       // in front of the halo, same plane
+      group.add(disc);
+    }
+    group.position.set(o.x == null ? -14 : o.x, o.y == null ? 4.6 : o.y, o.z == null ? -19 : o.z);
+    group.disc = disc;
+    group.glow = glow;
+    group.setPosition = (v) => { group.position.copy(v); return group; };
+    group.setIntensity = (k) => {
+      const q = K.clamp(k);
+      glow.material.opacity = q;
+      if (disc) disc.material.opacity = q * 0.95;
+      return group;
+    };
+    return group;
   };
 
   K.stars = function (THREE, count, radius, rand) {
@@ -467,22 +615,92 @@
     const rim = new THREE.DirectionalLight(o.rimColor == null ? 0x9fc4ff : o.rimColor, o.rim == null ? 0.5 : o.rim);
     rim.position.set(-14, 10, -18);
     scene.add(rim);
-    // Fill that rides with the camera. Backlit or night shots otherwise read as a black cut-out where
-    // the character faces the lens; a fill from the camera side fixes it without flattening the key.
-    // Off by default (fill: 0). Call rig.sync(camera) once per frame in draw(t).
-    const fillOn = o.fill != null && o.fill > 0;
-    const fill = new THREE.DirectionalLight(o.fillColor == null ? 0x9fb6d8 : o.fillColor, o.fill || 0);
-    fill.position.set(0, 6, 14);
+    // FILL — the light that saves a backlit or night scene. With key/rim only, a character facing the
+    // lens is a black cut-out (this was the first real gap the 31 s story film hit). The fill sits on
+    // the camera side by default, slightly above eye level, cool and weak enough not to flatten the key.
+    //   fill: number | 'auto' (= 1.1)      default 0 → identical to the old rig
+    //   fillColor                           default 0x9fb6d8
+    //   fillFrom: [x, y, z] | 'camera'      default [7, 5.5, 10] (front-right, above)
+    //   rig.setFill(k)                      animate it with t (ramp up when the scene goes to night)
+    //   rig.sync(camera)                    once per frame; only needed when fillFrom === 'camera'
+    const fillWanted = o.fill === 'auto' ? 1.1 : Math.max(0, Number(o.fill) || 0);
+    const fill = new THREE.DirectionalLight(o.fillColor == null ? 0x9fb6d8 : o.fillColor, fillWanted);
+    const followCamera = o.fillFrom === 'camera';
+    const fillFrom = followCamera ? null : (o.fillFrom || [7, 5.5, 10]);
+    if (fillFrom) fill.position.set(fillFrom[0], fillFrom[1], fillFrom[2]);
+    else fill.position.set(0, 6, 14);                 // a sane pose before the first sync()
     scene.add(fill);
     const rig = { hemi, key, rim, fill };
+    rig.setFill = function (k) {
+      fill.intensity = Math.max(0, k == null ? fillWanted : Number(k) || 0);
+      return rig;
+    };
     rig.sync = function (camera) {
-      if (!fillOn || !camera) return rig;
+      if (!followCamera || !camera) return rig;
       const d = o.fillDist == null ? 1 : o.fillDist;
       const p = camera.position;
       fill.position.set(p.x * d, p.y * d + (o.fillLift == null ? 2 : o.fillLift), p.z * d);
       return rig;
     };
     return rig;
+  };
+
+  // GRADE — desaturation / lift / tint for "lost, weathered, remembered" beats (the grammar's
+  // 风化 / 失去 row). Every graded material keeps a snapshot of its original colour, and
+  // setDesaturate(k) recomputes from that snapshot, so it is a pure function of k: no accumulation,
+  // no drift after seeking backwards.
+  //   const grade = K.grade(scene, K, { tint: 0x9aa7b5, lift: 0.02 });
+  //   grade.setDesaturate(0.6);   // 0 = as authored, 1 = fully grey
+  //   grade.set({ desaturate: 0.6, lift: 0 });   // same thing, all knobs at once
+  // Materials added to the scene AFTER the first call are not graded (call grade.refresh() if you add more).
+  K.grade = function (scene, L, opts) {
+    const kit = L || K;
+    const o = opts || {};
+    const base = new Map();                            // material.uuid -> { mat, color: Color }
+    const collect = () => {
+      scene.traverse((obj) => {
+        const mats = obj.material ? (Array.isArray(obj.material) ? obj.material : [obj.material]) : [];
+        for (const m of mats) {
+          if (!m || !m.color || base.has(m.uuid)) continue;
+          base.set(m.uuid, { mat: m, color: m.color.clone() });
+        }
+      });
+      return base.size;
+    };
+    collect();
+    // no THREE here (this factory gets the scene, not the namespace): derive a scratch colour from a
+    // material we already hold, so grading works without importing anything.
+    const scratch = base.size ? [...base.values()][0].color.clone() : null;
+    const tint = o.tint == null || !scratch ? null : scratch.clone().setHex(o.tint);
+    const grey = scratch ? scratch.clone() : null;
+    const state = { desaturate: kit.clamp(o.desaturate == null ? 0 : o.desaturate), lift: o.lift == null ? 0 : o.lift };
+    const apply = () => {
+      const k = kit.clamp(state.desaturate);
+      for (const { mat, color } of base.values()) {
+        const c = color.clone();
+        if (k > 0 && grey) {
+          const g = c.r * 0.299 + c.g * 0.587 + c.b * 0.114;
+          grey.setRGB(g, g, g);
+          c.lerp(grey, k);
+        }
+        if (tint) c.lerp(tint, 0.35 * k);
+        if (state.lift) c.addScalar(state.lift * (1 - k * 0.5));
+        mat.color.copy(c);
+      }
+      return gradeApi;
+    };
+    const gradeApi = {
+      setDesaturate(k) { state.desaturate = kit.clamp(k); return apply(); },
+      set(next) {
+        if (!next) return apply();
+        if (next.desaturate != null) state.desaturate = kit.clamp(next.desaturate);
+        if (next.lift != null) state.lift = next.lift;
+        return apply();
+      },
+      refresh() { collect(); return apply(); },
+      get materials() { return [...base.values()].map((b) => b.mat); },
+    };
+    return apply();
   };
 
   K.makeRenderer = function (THREE, canvas, opts) {

@@ -7,9 +7,11 @@
 // Copies assets/skeleton → my-film (minus its own self-check stills), renames the
 // composition id to a slug of the folder name, and drops a story.md to fill in.
 
-import { cp, readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { cp, readFile, writeFile, mkdir, access, copyFile } from 'node:fs/promises';
 import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
@@ -50,6 +52,44 @@ html = html
   .replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
 await writeFile(indexPath, html, 'utf8');
 
+// Ship huashu-motion's runtime (om.js) with the new film when it is installed: that file is what makes
+// OM.music / OM.sfx declarations exist, so `om sound` and a plain browser both have something to read.
+// Looked up through npm itself — no absolute path is ever written down. Missing runtime is not an error:
+// the film renders silent (its index.html loads ./om.js optionally and falls back to a pinned CDN).
+// Where huashu-motion's runtime may live. Deliberately no `npm root -g` subprocess: on Windows that
+// needs a shell (and passing args through a shell is deprecated), and the paths below cover the real
+// installs. Override with --om <path> or HUASHU_MOTION_OM.
+const omSource = (() => {
+  const explicit = (args.indexOf('--om') >= 0 ? args[args.indexOf('--om') + 1] : null) || process.env.HUASHU_MOTION_OM;
+  const roots = [
+    process.env.npm_config_prefix && join(process.env.npm_config_prefix, 'node_modules'),
+    process.env.APPDATA && join(process.env.APPDATA, 'npm', 'node_modules'),   // Windows global
+    process.env.PREFIX && join(process.env.PREFIX, 'lib', 'node_modules'),     // nvm / homebrew
+    '/usr/local/lib/node_modules',
+    '/usr/lib/node_modules',
+    join(ROOT, 'node_modules'),                                                // repo-local install
+  ].filter(Boolean);
+  const candidates = [
+    ...(explicit ? [resolve(explicit)] : []),
+    ...roots.map((r) => join(r, 'huashu-motion', 'runtime', 'om.js')),
+  ];
+  return candidates.find((p) => existsSync(p)) || null;
+})();
+let omNote;
+if (omSource) {
+  await copyFile(omSource, join(dest, 'om.js'));
+  // the page only tries ./om.js when this marker is present — that keeps every project that does not
+  // ship the runtime free of a 404 in the console
+  html = await readFile(indexPath, 'utf8');
+  html = html.replace(/<html\b([^>]*)>/, (m, attrs) => /data-om-local/.test(attrs)
+    ? m
+    : `<html${attrs} data-om-local="1">`);
+  await writeFile(indexPath, html, 'utf8');
+  omNote = 'om.js 已随工程复制（OM.music / OM.sfx 可用）';
+} else {
+  omNote = '没有 om.js —— 片子将无声（安装 huashu-motion，或把 runtime/om.js 放到工程根目录）';
+}
+
 // story.md is the first deliverable of the workflow: the 8 beats, before any code.
 // Unwrap the fill-in template (it keeps its own ```markdown fence) and title it.
 const beats = await readFile(join(ROOT, 'assets', 'beats-template.md'), 'utf8');
@@ -59,6 +99,7 @@ const body = (fenced ? fenced[1] : beats).replace(/^# <片名>\s*/m, `# ${title}
 await writeFile(join(dest, 'story.md'), body.trimEnd() + '\n' + (after ? '\n' + after[1].trim() + '\n' : ''), 'utf8');
 
 console.log(`created ${dest}   (composition id: ${slug})`);
+console.log(`  ${omNote}`);
 console.log(`
 next:
   cd ${dirArg}
@@ -66,7 +107,8 @@ next:
   2. edit the STORY block in index.html (beats + camera keys + caption)
   3. om still . --at 1,6,11,16      # look at four frames
   4. om check .                     # structure / motion / text checks
-  5. om render . --fps 60           # out/<name>-v1.mp4
+  5. om sound .                     # score + effects (writes assets/sound.wav and the <audio> tag)
+  6. om render . --fps 60           # out/<name>-v1.mp4
 
 no om CLI? node ${join(ROOT, 'scripts', 'vendor-three.mjs')} . then render with any headless Chrome.
 

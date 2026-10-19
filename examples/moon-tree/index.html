@@ -114,6 +114,26 @@ async function loadGsap() {
   throw new Error('gsap unavailable — ' + errors.join(' | ') + ' (offline? run: node scripts/vendor-three.mjs .)');
 }
 
+// huashu-motion's helpers (OM.music / OM.sfx / OM.clock) are what make the film audible. They are
+// OPTIONAL: without them the picture is identical and only the soundtrack is missing — so this never
+// throws. A local ./om.js comes first (scripts/new-film.mjs drops one in when huashu-motion is
+// installed), then the pinned CDN. Under the `om` renderer the runtime is already injected.
+const OM_SOURCES = [
+  ...(document.documentElement.dataset.omLocal === '1' ? ['./om.js'] : []),
+  'https://cdn.jsdelivr.net/npm/huashu-motion@0.1.0/runtime/om.js',
+  'https://unpkg.com/huashu-motion@0.1.0/runtime/om.js',
+];
+async function loadOmRuntime() {
+  if (window.OM && window.OM.sfx) return 'preloaded';
+  for (const src of OM_SOURCES) {
+    try {
+      await injectScript(src, 8000);
+      if (window.OM && window.OM.sfx) return src;
+    } catch (e) { /* try the next one — a missing runtime is a mute film, not a broken one */ }
+  }
+  return null;
+}
+
 const hudText = (msg, bad) => {
   const hud = document.getElementById('hud');
   if (!hud) return;
@@ -521,6 +541,7 @@ const DURATION = Number(film.dataset.duration) || STORY.duration;
 
 const ready = boot.then(async () => {
   await loadGsap();
+  await loadOmRuntime();          // optional: mute when unavailable, never fatal
   const tl = window.gsap.timeline({ paused: true });
   const proxy = { t: 0 };
   Object.defineProperty(proxy, 't', {
