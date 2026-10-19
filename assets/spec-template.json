@@ -1,0 +1,62 @@
+{
+  "id": "my-film",
+  "title": "片名",
+  "duration": 38,
+  "fps": 60,
+  "aspect": "16:9",
+  "genre": "story",
+  "palette": ["#8a7a64", "#8dc45c", "#4a5a6a", "#b44a34"],
+  "accent": "#ffd08a",
+  "cast": [
+    { "id": "hero", "kind": "figure", "opts": { "scale": 0.95, "tunic": "#4a5a6a", "hat": true, "tool": "hoe" } }
+  ],
+  "stages": [
+    { "id": "hook",  "t": [0, 2],     "role": "hook",  "verb": "问题在做什么", "scale": "world",
+      "change": { "kind": "none", "count": 0, "what": "" },
+      "camera": { "from": [0, 1.4, 5.5], "to": [0, 1.4, 5.7], "look": [0, 3.0, -9], "fov": 44 },
+      "light": { "time": "day", "key": 1.0 },
+      "caption": { "zh": "一句话提出问题", "en": "One line." }, "sfx": [["tick", 0.4]] },
+
+    { "id": "setup", "t": [2, 6],     "role": "setup", "verb": "谁想要什么", "scale": "world",
+      "change": { "kind": "gesture", "count": 1, "what": "拿起工具" },
+      "camera": { "from": [0, 1.4, 5.7], "to": [0, 1.8, 6.8], "look": [0, 1.6, -4.4], "fov": 42 },
+      "light": { "time": "day", "key": 1.0 },
+      "caption": { "zh": "谁、想要什么、什么挡着", "en": "Who wants what." }, "sfx": [["whoosh", 2.2]] },
+
+    { "id": "first", "t": [6, 10],    "role": "first-unit", "verb": "做一次最小的动作", "scale": "object",
+      "change": { "kind": "increment", "count": 1, "what": "第一块土落进土堆" },
+      "camera": { "from": [2.7, 1.3, 3.1], "to": [2.7, 1.3, 3.1], "look": [0.2, 0.9, -3.2], "fov": 45 },
+      "light": { "time": "day", "key": 1.0 },
+      "caption": { "zh": "", "en": "" }, "sfx": [["thud", 6.6]] },
+
+    { "id": "build", "t": [10, 20],   "role": "accumulation", "verb": "重复，并且变多", "scale": "cluster",
+      "change": { "kind": "increment", "count": 5, "what": "每趟 +1 块，共 5 次" },
+      "camera": { "from": [2.7, 1.3, 3.1], "to": [2.5, 1.3, 2.9], "look": [0.2, 0.9, -3.2], "fov": 45 },
+      "light": { "time": "day", "key": 1.0 },
+      "caption": { "zh": "", "en": "" }, "sfx": [["thud", 8.8], ["thud", 11.0], ["thud", 13.2], ["thud", 15.4], ["thud", 17.6]] },
+
+    { "id": "turn",  "t": [20, 24.5], "role": "turn",  "verb": "被质疑，然后回答", "scale": "cluster",
+      "change": { "kind": "pause", "count": 1, "what": "停手 0.6s" },
+      "camera": { "from": [3.0, 1.55, 4.4], "to": [2.7, 1.45, 3.7], "look": [0.1, 1.1, -1.4], "fov": 38 },
+      "light": { "time": "day", "key": 0.9 },
+      "caption": { "zh": "全片的论点（一句话）", "en": "The thesis." }, "sfx": [["tick", 20.2]] },
+
+    { "id": "cost",  "t": [24.5, 27.5], "role": "cost", "verb": "差距同框", "scale": "field",
+      "change": { "kind": "none", "count": 0, "what": "一帧里：他做到的量 vs 他要做的量" },
+      "camera": { "from": [4.6, 2.35, 8.2], "to": [4.4, 2.3, 7.8], "look": [-1.4, 1.8, -4.6], "fov": 42 },
+      "light": { "time": "night", "key": 0.3 },
+      "caption": { "zh": "", "en": "" }, "sfx": [["subdrop", 25.0]] },
+
+    { "id": "payoff", "t": [27.5, 33], "role": "payoff", "verb": "不可能的事发生", "scale": "world",
+      "change": { "kind": "transform", "count": 1, "what": "山被移走" },
+      "camera": { "from": [4.6, 2.5, 8.8], "to": [5.0, 2.2, 9.0], "look": [-2.6, 3.8, -8.0], "fov": 44 },
+      "light": { "time": "dawn", "key": 1.2 },
+      "caption": { "zh": "", "en": "" }, "sfx": [["riser", 27.8], ["impact", 29.2]] },
+
+    { "id": "button", "t": [33, 38],  "role": "button", "verb": "回到同一机位的对照", "scale": "world",
+      "change": { "kind": "open", "count": 1, "what": "路通了" },
+      "camera": { "from": [4.8, 1.95, 8.0], "to": [4.2, 1.7, 7.0], "look": [-1.2, 1.5, -5.0], "fov": 38 },
+      "light": { "time": "dawn", "key": 1.2 },
+      "caption": { "zh": "一句收尾", "en": "One closing line." }, "sfx": [["chime", 32.8], ["ding", 34.8]] }
+  ]
+}

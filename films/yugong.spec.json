@@ -1,0 +1,81 @@
+{
+  "id": "yugong",
+  "title": "愚公移山",
+  "duration": 38,
+  "fps": 60,
+  "aspect": "16:9",
+  "genre": "story",
+  "palette": ["#8a7a64", "#8dc45c", "#4a5a6a", "#b44a34"],
+  "accent": "#ffd08a",
+  "ladder": ["object", "cluster", "field", "world"],
+  "cast": [
+    { "id": "hero", "kind": "figure", "opts": { "scale": 0.95, "tunic": "#4a5a6a", "hat": true, "beard": true, "tool": "hoe" } },
+    { "id": "mocker", "kind": "figure", "opts": { "scale": 0.9, "tunic": "#8a6a4a", "hat": true } }
+  ],
+  "stages": [
+    {
+      "id": "hook", "t": [0, 2], "role": "hook", "verb": "抬头看山", "scale": "world",
+      "change": { "kind": "none", "count": 0, "what": "" },
+      "camera": { "from": [3.9, 1.35, 5.4], "to": [3.8, 1.4, 5.7], "look": [-3.0, 4.6, -9.0], "fov": 44 },
+      "light": { "time": "day", "key": 1.0 },
+      "caption": { "zh": "门被山堵死了。", "en": "The mountain had closed the door." },
+      "sfx": [["tick", 0.4]]
+    },
+    {
+      "id": "setup", "t": [2, 6], "role": "setup", "verb": "抄起锄头", "scale": "world",
+      "change": { "kind": "gesture", "count": 1, "what": "弯腰拿起锄头" },
+      "camera": { "from": [4.4, 1.8, 6.8], "to": [3.4, 1.6, 5.6], "look": [-1.2, 1.6, -4.4], "fov": 42 },
+      "light": { "time": "day", "key": 1.0 },
+      "caption": { "zh": "愚公九十岁，决定把它搬走。", "en": "Ninety years old, he decided to move it." },
+      "sfx": [["whoosh", 2.2], ["tick", 4.3]]
+    },
+    {
+      "id": "first", "t": [6, 10], "role": "first-unit", "verb": "挖第一筐", "scale": "object",
+      "change": { "kind": "increment", "count": 2, "what": "第一锄 → 第一块土落进土堆" },
+      "camera": { "from": [2.7, 1.3, 3.1], "to": [2.7, 1.3, 3.1], "look": [0.2, 0.9, -3.2], "fov": 45 },
+      "light": { "time": "day", "key": 1.0 },
+      "caption": { "zh": "", "en": "" },
+      "sfx": [["thud", 6.6], ["thud", 8.8]]
+    },
+    {
+      "id": "build", "t": [10, 20], "role": "accumulation", "verb": "一趟一趟地搬", "scale": "cluster",
+      "change": { "kind": "increment", "count": 4, "what": "土堆每趟 +1 块（共 10 块），山的工作面每两趟退一列" },
+      "camera": { "from": [2.7, 1.3, 3.1], "to": [2.5, 1.28, 2.9], "look": [0.2, 0.9, -3.2], "fov": 45 },
+      "light": { "time": "day", "key": 1.0 },
+      "caption": { "zh": "", "en": "" },
+      "sfx": [["thud", 11.0], ["thud", 13.2], ["thud", 15.4], ["thud", 17.6]]
+    },
+    {
+      "id": "turn", "t": [20, 24.5], "role": "turn", "verb": "停手、转身、回答", "scale": "cluster",
+      "change": { "kind": "pause", "count": 1, "what": "停手 0.6s，再转回去继续" },
+      "camera": { "from": [3.0, 1.55, 4.4], "to": [2.7, 1.45, 3.7], "look": [0.1, 1.1, -1.4], "fov": 38 },
+      "light": { "time": "day", "key": 0.9 },
+      "caption": { "zh": "子子孙孙无穷匮也，而山不加增。", "en": "The mountain does not grow. His family does not stop." },
+      "sfx": [["tick", 20.2]]
+    },
+    {
+      "id": "cost", "t": [24.5, 27.5], "role": "cost", "verb": "夜里睡在土堆旁", "scale": "field",
+      "change": { "kind": "none", "count": 0, "what": "一帧里：一小堆土 vs 一整座山" },
+      "camera": { "from": [4.6, 2.35, 8.2], "to": [4.4, 2.3, 7.8], "look": [-1.4, 1.8, -4.6], "fov": 42 },
+      "light": { "time": "night", "key": 0.28 },
+      "caption": { "zh": "", "en": "" },
+      "sfx": [["subdrop", 25.0]]
+    },
+    {
+      "id": "payoff", "t": [27.5, 33], "role": "payoff", "verb": "山被抬走", "scale": "world",
+      "change": { "kind": "transform", "count": 1, "what": "两道光柱落下，山整体离地、移出画面" },
+      "camera": { "from": [4.6, 2.5, 8.8], "to": [5.0, 2.2, 9.0], "look": [-2.6, 3.8, -8.0], "fov": 44 },
+      "light": { "time": "dawn", "key": 1.2 },
+      "caption": { "zh": "", "en": "" },
+      "sfx": [["riser", 27.8], ["impact", 29.2]]
+    },
+    {
+      "id": "button", "t": [33, 38], "role": "button", "verb": "走上那条路", "scale": "world",
+      "change": { "kind": "open", "count": 1, "what": "山原来的位置出现一条路，他走过去" },
+      "camera": { "from": [4.8, 1.95, 8.0], "to": [4.2, 1.7, 7.0], "look": [-1.2, 1.5, -5.0], "fov": 38 },
+      "light": { "time": "dawn", "key": 1.2 },
+      "caption": { "zh": "山，就这样被移走了。", "en": "And so the mountain was moved." },
+      "sfx": [["chime", 32.8], ["ding", 34.8]]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "id": "reference-city",
+  "title": "参考片逆向：键盘里的小世界（点亮一座城）",
+  "duration": 64,
+  "fps": 60,
+  "aspect": "16:9",
+  "genre": "build",
+  "palette": ["#12151b", "#2b3340", "#7cb04a", "#ffd08a"],
+  "accent": "#ffbe55",
+  "ladder": ["object", "cluster", "field", "world"],
+  "cast": [
+    { "id": "clawd", "kind": "figure", "opts": { "scale": 1 } }
+  ],
+  "stages": [
+    {
+      "id": "desk", "t": [0, 6], "role": "hook", "verb": "一盏灯亮起", "scale": "object",
+      "change": { "kind": "light-up", "count": 1, "what": "桌面从全黑到一盏台灯亮" },
+      "camera": { "from": [2.2, 0.9, 3.4], "to": [2.0, 1.0, 3.2], "look": [0, 0.4, 0], "fov": 40 },
+      "light": { "time": "night", "key": 0.25 },
+      "caption": { "zh": "深夜，只有一盏灯亮着。", "en": "Late at night, one lamp." },
+      "sfx": [["click", 1.2], ["hum", 1.6]]
+    },
+    {
+      "id": "keyboard", "t": [6, 14], "role": "setup", "verb": "键盘一排排亮起", "scale": "cluster",
+      "change": { "kind": "light-up", "count": 8, "what": "背光从中间向两侧一排排亮" },
+      "camera": { "from": [2.0, 1.0, 3.2], "to": [1.6, 1.4, 2.8], "look": [0, 0.2, 0], "fov": 42 },
+      "light": { "time": "night", "key": 0.3 },
+      "caption": { "zh": "", "en": "" }, "sfx": [["tick", 6.4], ["tick", 8.2], ["tick", 10.0], ["tick", 11.8]]
+    },
+    {
+      "id": "caps", "t": [14, 22], "role": "first-unit", "verb": "键帽里长出一棵树", "scale": "object",
+      "change": { "kind": "grow", "count": 1, "what": "一个键帽变成一小片地，长出第一棵树" },
+      "camera": { "from": [1.2, 0.5, 1.4], "to": [1.1, 0.55, 1.3], "look": [0, 0.15, 0], "fov": 38 },
+      "light": { "time": "night", "key": 0.4 },
+      "caption": { "zh": "每个键帽里，都是一个小世界。", "en": "Every keycap holds a world." },
+      "sfx": [["pop", 15.0], ["riser", 16.2]]
+    },
+    {
+      "id": "world", "t": [22, 32], "role": "accumulation", "verb": "一个个键帽亮成一片", "scale": "cluster",
+      "change": { "kind": "light-up", "count": 12, "what": "12 个键帽依次亮起，每个一套小房子" },
+      "camera": { "from": [1.1, 0.55, 1.3], "to": [2.4, 1.2, 3.0], "look": [0, 0.3, 0], "fov": 44 },
+      "light": { "time": "night", "key": 0.5 },
+      "caption": { "zh": "", "en": "" },
+      "sfx": [["pop", 23.0], ["pop", 25.0], ["pop", 27.0], ["pop", 29.0]]
+    },
+    {
+      "id": "city", "t": [32, 44], "role": "turn", "verb": "城市的灯一盏接一盏亮", "scale": "field",
+      "change": { "kind": "light-up", "count": 24, "what": "街灯沿路点亮，从近到远，最后整条街" },
+      "camera": { "from": [3.0, 1.6, 4.2], "to": [4.6, 2.4, 6.4], "look": [0, 0.6, -2], "fov": 46 },
+      "light": { "time": "night", "key": 0.6 },
+      "caption": { "zh": "灯，一盏一盏地亮。", "en": "One light at a time." },
+      "sfx": [["ding", 33.0], ["ding", 35.0], ["ding", 37.0], ["chime", 40.0]]
+    },
+    {
+      "id": "pullout", "t": [44, 52], "role": "cost", "verb": "拉远，看见整片大陆", "scale": "world",
+      "change": { "kind": "reveal", "count": 1, "what": "从街道拉到整片大陆的尺度" },
+      "camera": { "from": [4.6, 2.4, 6.4], "to": [14.0, 8.0, 20.0], "look": [0, 0.4, -2], "fov": 50 },
+      "light": { "time": "night", "key": 0.5 },
+      "caption": { "zh": "", "en": "" }, "sfx": [["whoosh", 44.4], ["subdrop", 46.0]]
+    },
+    {
+      "id": "reveal", "t": [52, 58], "role": "payoff", "verb": "整座城市同时亮到最亮", "scale": "world",
+      "change": { "kind": "light-up", "count": 60, "what": "全城灯火同时达到峰值" },
+      "camera": { "from": [14.0, 8.0, 20.0], "to": [16.0, 9.0, 22.0], "look": [0, 0.6, -2], "fov": 50 },
+      "light": { "time": "night", "key": 0.9 },
+      "caption": { "zh": "", "en": "" }, "sfx": [["impact", 52.2], ["riser", 52.6]]
+    },
+    {
+      "id": "title", "t": [58, 64], "role": "button", "verb": "标题落定", "scale": "world",
+      "change": { "kind": "hold", "count": 1, "what": "画面停住，字出来" },
+      "camera": { "from": [16.0, 9.0, 22.0], "to": [16.6, 9.2, 22.8], "look": [0, 0.6, -2], "fov": 50 },
+      "light": { "time": "night", "key": 0.85 },
+      "caption": { "zh": "一个世界，在你的键盘上。", "en": "A world, on your keyboard." },
+      "sfx": [["ding", 59.0], ["ring", 60.0]]
+    }
+  ]
+}

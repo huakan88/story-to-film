@@ -29,8 +29,10 @@ description: >-
 ## 六阶段（每阶段有交付物，不跳）
 
 1. **接故事**（≤3 个问题）：给谁看 / 多长 / 要不要旁白或字幕。其余靠推断，别审问。
-2. **改写成 8 拍**：把心理描述改成**可见动作**。交付 `story.md`：8 拍 × 一个动词 + 能量曲线。
-   → `references/01-story-to-beats.md`（骨架）；每段几秒、这几秒要交代什么 → `references/07-timing.md`（配比）
+2. **先写规格，再写代码**：把故事落成 `films/<id>.spec.json`——8 段 × 一个可见动词 / 尺度 / 可数变化 / 机位。
+   `node scripts/spec-to-film.mjs films/<id>.spec.json` 必须 0 problem，`--emit` 出来的代码直接粘进 `index.html`。
+   → `references/08-prompt-spec.md`（规格格式、尺度阶梯、解析器拦什么）；
+   骨架与配比 → `references/01-story-to-beats.md`、`references/07-timing.md`
 3. **分镜**：每拍 1–4 个镜头，逐条填进叙事动作表（动作 / 实现 / 镜头 / 音效）。
    **填不进表的一行，就是装饰，删掉。** → `references/02-shot-grammar.md`
 4. **建世界**：先做最贵的那一拍（通常是高潮或落点），像了再铺其余。
@@ -83,6 +85,7 @@ node scripts/qa-sheet.mjs out/x.mp4    # 4 秒一格联络表，给冷审片看
 | `05-sound-and-voice.md` | 配乐、音效打点、旁白与字幕 |
 | `06-review.md` | 交付前审片；列出必须修的失败模式 |
 | `07-timing.md` | 分镜前定时间预算；"看不出东西在变多"或"看不下去"时先读这条 |
+| `08-prompt-spec.md` | 开渲前写规格（`films/*.spec.json`）；觉得这部片子平、单调时先读这条 |
 
 ## 最后一条
 
