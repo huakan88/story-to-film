@@ -29,13 +29,81 @@ const BRANCH = String(flag('branch', 'main'));
 const MESSAGE = String(flag('message', 'update ' + new Date().toISOString().slice(0, 10)));
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', 'vendor', '.om', '.github-cache']);
-const skip = (rel) => {
+
+// .gitignore is the single source of truth for "what is not part of the repo", but this script
+// uploads files itself — so it has to honour it. Handled: comments, blank lines, leading '/',
+// trailing '/', '**', '*', '?', plain names, and '!' negations. A file inside an ignored
+// directory is ignored too (so `**/review/` covers `examples/review/frame.jpg`).
+const IGNORE = (() => {
+  const escape = (c) => c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  const globToRe = (p) => {
+    let out = '';
+    for (let i = 0; i < p.length; i++) {
+      const c = p[i];
+      if (c === '*') {
+        if (p[i + 1] === '*') {                 // '**' matches across slashes
+          out += '.*';
+          i += 1;
+          if (p[i + 1] === '/') i += 1;         // and '**/' also swallows the slash
+        } else {
+          out += '[^/]*';
+        }
+      } else if (c === '?') out += '[^/]';
+      else out += escape(c);
+    }
+    return new RegExp('^' + out + '$');
+  };
+
+  const rules = [];
+  try {
+    for (const raw of readFileSync('.gitignore', 'utf8').split('\n')) {
+      const line = raw.trim();
+      if (!line || line.startsWith('#')) continue;
+      const negate = line.startsWith('!');
+      const body = (negate ? line.slice(1) : line).replace(/^\/+/, '').replace(/\/+$/, '');
+      if (!body) continue;
+      rules.push({
+        negate,
+        bare: !/[*?]/.test(body) && !body.includes('/'),   // "out" matches a path segment anywhere
+        name: body,
+        re: globToRe(body),
+      });
+    }
+  } catch { /* no .gitignore: nothing extra to skip */ }
+
+  const matchOne = (rel, isDir) => {
+    const parts = rel.replace(/\/+$/, '').split('/');
+    const name = parts.at(-1);
+    let ignored = false;
+    for (const r of rules) {
+      const hit = (r.re.test(rel) || r.re.test(rel + '/') ||
+        (r.bare && parts.includes(r.name)));
+      if (hit) ignored = !r.negate;
+    }
+    return ignored;
+  };
+
+  return (rel, isDir) => {
+    if (matchOne(rel, isDir)) return true;
+    // a file inside an ignored directory is ignored too: `**/review/` must cover `examples/review/x.jpg`
+    const segs = rel.replace(/\/+$/, '').split('/');
+    for (let i = 1; i < segs.length; i++) {
+      if (matchOne(segs.slice(0, i).join('/'), true)) return true;
+    }
+    return false;
+  };
+})();
+
+const skip = (rel, isDir) => {
   if (ALL) return false;
-  const parts = rel.split('/');
+  const parts = rel.replace(/\/+$/, '').split('/');
   if (parts.some((p) => SKIP_DIRS.has(p))) return true;
   if (/(^|\/)assets\/sound\.wav$/.test(rel)) return true;              // `om sound` output, regenerated
   if (/\.mp4$/.test(rel) && !/(^|\/)examples\/.*\.mp4$/.test(rel)) return true; // keep the demo previews
-  return parts.some((p) => p.startsWith('_')) || /^(Thumbs\.db|\.DS_Store)$/.test(parts.at(-1));
+  if (parts.some((p) => p.startsWith('_'))) return true;
+  if (/^(Thumbs\.db|\.DS_Store)$/.test(parts.at(-1))) return true;
+  if (IGNORE(rel, isDir)) return true;
+  return false;
 };
 
 // ---------- identify the repository ----------
