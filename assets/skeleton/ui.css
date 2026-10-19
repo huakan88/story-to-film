@@ -22,25 +22,27 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 /* fade-in from black on the first beat */
 #veil { position: absolute; inset: 0; background: #050607; opacity: .9; }
 
-/* ---- caption: one line + one small line ------------------------------- */
-#cap { position: absolute; left: 0; right: 0; top: 44%; text-align: center; opacity: 0; }
-#cap::before {
-  content: ""; position: absolute; left: 20%; right: 20%; top: -58px; bottom: -58px; z-index: -1;
-  background: radial-gradient(56% 60% at 50% 50%, #00000099 0%, #0000004d 56%, #00000000 80%);
-}
+/* ---- caption: a lower-third card — the subject owns the middle of the frame ---- */
+/* display:none at rest: a transparent text box still counts as "text on screen" to audits */
+#cap { position: absolute; left: 0; right: 0; top: 62%; text-align: center; opacity: 0; display: none; }
+/* the plate carries the contrast, so the caption can sit over grass, sky or a night scene */
 #cap .l1 {
-  font-size: 76px; font-weight: 900; letter-spacing: 4px; line-height: 1.22;
-  text-shadow: 0 6px 30px #000000cc, 0 18px 60px #00000099;
+  display: inline-block; max-width: 68%;
+  padding: 16px 34px 18px; border-radius: 18px;
+  background: #06080bcc; border: 1px solid #ffffff1f;
+  box-shadow: 0 22px 60px -24px #000000e6;
+  font-size: 66px; font-weight: 900; letter-spacing: 3px; line-height: 1.24;
+  text-shadow: 0 4px 22px #000000b3;
 }
 #cap .l2 {
-  margin-top: 16px; font-size: 26px; letter-spacing: 6px; opacity: .72;
-  text-shadow: 0 4px 20px #000000cc;
+  margin-top: 14px; font-size: 25px; letter-spacing: 6px; opacity: .9;
+  text-shadow: 0 4px 20px #000000e6;
 }
 
 /* ---- hud: a small label, bottom left ---------------------------------- */
 #hud {
   position: absolute; left: 72px; bottom: 56px;
-  font-size: 20px; letter-spacing: 7px; opacity: 0;
+  font-size: 20px; letter-spacing: 7px; opacity: 0; display: none;
   text-shadow: 0 2px 12px #000000cc;
 }
 #hud .dot {

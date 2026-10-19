@@ -13,7 +13,8 @@
   // ---------------- TIMING: the only numbers you normally touch ----------------
   const TIMING = {
     duration: 8,        // seconds — keep index.html's data-duration in sync
-    veilOut: 0.9,       // fade in from black over [0, veilOut]
+    veilIn: 0.78,       // the first frame is dim, never a flat black: the world is already there
+    veilOut: 0.9,       // …and lifts over [0, veilOut]
     hudIn: 0.4,         // label fades in
     hudOut: 2.2,        // …and out again
     captionIn: 5.3,     // caption starts
@@ -38,19 +39,24 @@
   function frame(t) {
     if (!el.veil) return;
 
-    // fade in from black
-    el.veil.style.opacity = String(1 - easeOut(seg(t, 0, TIMING.veilOut)));
+    // fade in from a dim first frame (never pure black — a flat opening frame reads as a bug)
+    el.veil.style.opacity = String((TIMING.veilIn) * (1 - easeOut(seg(t, 0, TIMING.veilOut))));
 
     // label: in, hold, out
     const hudIn = seg(t, TIMING.hudIn, TIMING.hudIn + 0.5);
     const hudOut = seg(t, TIMING.hudOut, TIMING.hudOut + 0.6);
-    el.hud.style.opacity = String(Math.max(0, hudIn - hudOut) * 0.62);
+    const hudOp = Math.max(0, hudIn - hudOut) * 0.62;
+    el.hud.style.opacity = String(hudOp);
+    el.hud.style.display = hudOp > 0.08 ? 'block' : 'none';
     el.hud.style.transform = 'translateX(' + lerp(-16, 0, easeOut(hudIn)) + 'px)';
 
     // caption: in, hold, out — a scrim rides along (it lives in CSS, so opacity is enough)
     const inK = easeOut(seg(t, TIMING.captionIn, TIMING.captionInEnd));
     const outK = seg(t, TIMING.captionOut, TIMING.captionOutEnd);
-    el.cap.style.opacity = String(Math.max(0, inK - outK));
+    const capOp = Math.max(0, inK - outK);
+    el.cap.style.opacity = String(capOp);
+    // display, not visibility: a transparent caption is still a text box to layout/contrast audits
+    el.cap.style.display = capOp > 0.08 ? 'block' : 'none';
     el.l1.style.transform = 'translateY(' + (lerp(22, 0, inK) + lerp(0, -18, outK)) + 'px)';
     el.l2.style.opacity = String(Math.max(0, seg(t, TIMING.captionIn + 0.35, TIMING.captionInEnd + 0.3) - outK) * 0.72);
   }

@@ -7,9 +7,17 @@
 
 ![demo sheet](examples/sheet.jpg)
 
-▶ [`examples/seed-to-forest.mp4`](examples/seed-to-forest.mp4) — 18 秒示例，就是 `assets/skeleton/` 原样渲染的（约 700 KB）
+▶ [`examples/seed-to-forest.mp4`](examples/seed-to-forest.mp4) — 18 秒示例（720p，1.2 MB）
+　 源码在 [`examples/seed-to-forest/`](examples/seed-to-forest/)：**完整工程**，可以照抄成自己的片子。
 
 ---
+
+## 它到底能做出什么
+
+一条 15–90 秒的片子，画面全部由代码算出来：地面、树、房子、角色、光、粒子，没有一个素材文件。
+你能改的是数字：几秒长出树、镜头怎么走、字幕说什么。改完重渲，还是同一条片子（可复现）。
+
+这不是"AI 生成视频"，是**用代码搭一个微缩世界，再用时间线把它演出来**——所以它稳、可审片、可交付。
 
 ## 为什么是「代码生成」
 
@@ -23,11 +31,15 @@
 ```bash
 git clone https://github.com/huakan88/story-to-film && cd story-to-film
 
-# ① 先看骨架自己能出什么（仓库里没有 index.html 在根目录，骨架在 assets/skeleton）
-om still  assets/skeleton --at 0.5,2,5,7.5     # 四张关键帧
-om render assets/skeleton --fps 60             # → assets/skeleton/out/*.mp4
+# ① 先看成品：示例工程 18 秒，源码就是它自己
+om still  examples/seed-to-forest --at 1,6,12,17   # 四个关键时刻
+om render examples/seed-to-forest --fps 60         # → examples/seed-to-forest/out/*.mp4
 
-# ② 开一个新工程，改成你的故事
+# ② 再看骨架（8 秒，最小可运行）
+om still  assets/skeleton --at 0.5,2,5,7.5
+om render assets/skeleton --fps 60
+
+# ③ 开一个新工程，改成你的故事
 node scripts/new-film.mjs my-film --title "一只猫的春天"
 cd my-film
 om still  . --at 1,6,11,16
@@ -98,9 +110,23 @@ scripts/
   vendor-three.mjs          冻结 three/gsap 到本地
   qa-sheet.mjs              成片联络表（给冷审片看）
 examples/
-  seed-to-forest.mp4        示例成片
-  sheet.jpg                 联络表
+  seed-to-forest/            ★ 完整示例工程（18 秒）：story.md + index.html + ui + world-kit
+  seed-to-forest.mp4         示例成片（720p / 30fps 预览版，源码渲染的是 1080p60）
+  poster.jpg / sheet.jpg     海报帧 + 联络表
 ```
+
+## 这份仓库验证过什么
+
+在 Windows + Chrome + `om`（huashu-motion 0.1.0）上实测：
+
+| 项 | 结果 |
+|---|---|
+| `om check examples/seed-to-forest` | **0 errors**，2 条字幕占位文案的 `low-contrast` 警告（该时刻字幕未显示，画面上不可见） |
+| `om render examples/seed-to-forest --fps 60` | 18 秒 / 1920×1080 / 60fps → 1080p 成片约 6.6 MB |
+| 渲染成本 | 1080p60 约 **140 ms/帧**（18s ≈ 2.5 分钟；30s ≈ 4 分钟） |
+| 骨架冷启动 | 本地 `three/` 优先，无网络请求；CDN 兜底时首次约 5 秒 |
+| `node scripts/new-film.mjs` | 生成干净的工程（自动排除 `_selfcheck/`、`vendor/`、`out/`），composition id 用目录名 slug |
+| `node scripts/qa-sheet.mjs` | 任意 mp4 → 联络表 + 5 张关键帧，供冷审片使用 |
 
 ## 依赖
 
@@ -119,7 +145,7 @@ examples/
 - **景深**：需要自写 depth-of-field 后处理，成本高，只在桌面/宏观段落值得。
 - **长叙事**：单条 30–90 秒最好；超过 90 秒建议拆章，每章复用同一套镜头语言。
 - **音乐**：`om sound` 是「按场景能量自动作曲」，风格接近但不是请人写的配乐。
-- 示例片是**骨架原样**渲染，故意留得朴素：它的用途是示范流程，不是作品集。
+- 示例片是**流程示范**，故意留得朴素：它的用途是教你改，不是作品集。
 
 ## License
 

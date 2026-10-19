@@ -156,8 +156,9 @@ const boot = (async () => {
   const W = 1920, H = 1080;
   const renderer = K.makeRenderer(THREE, document.getElementById('gl'), { width: W, height: H });
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x080a0d);
-  scene.fog = new THREE.Fog(0x080a0d, 18, 48);
+  scene.background = new THREE.Color(0x0a0d12);
+  // haze, not black: it dissolves the far edge of the ground into the sky
+  scene.fog = new THREE.Fog(0x9fb4c6, 16, 64);
 
   const camera = new THREE.PerspectiveCamera(34, W / H, 0.05, 300);
   const rig = K.lightRig(THREE, scene, { shadowSize: 8, shadowMap: 2048, key: 2.2, hemi: 0.85, rim: 0.5 });
@@ -166,11 +167,13 @@ const boot = (async () => {
   const rnd = K.rand(20261019);
   const TOP = 0.2; // grass surface height
 
-  scene.add(K.ground(THREE, { size: 4.6 }));
+  // A wide plateau: the ground never shows its rim, so the frame reads as landscape, not a puck.
+  // (ground() stacks a grass cap on a soil cylinder — keep its default depth so the cap stays on top)
+  scene.add(K.ground(THREE, { size: 34 }));
   const sky = K.skyDome(THREE, { r: 120, top: K.PAL.skyTop, bottom: K.PAL.skyBottom });
   scene.add(sky.mesh);
-  scene.add(K.sunOrMoon(THREE, { x: -17, y: 8.5, z: -21, size: 4.8 }));
-  scene.add(K.clouds(THREE, { count: 5, y: 26, spread: 120, rand: rnd }));
+  scene.add(K.sunOrMoon(THREE, { x: -19, y: 11, z: -30, size: 3.4 }));
+  scene.add(K.clouds(THREE, { count: 7, y: 30, spread: 150, rand: rnd }));
 
   const stars = K.stars(THREE, 500, 90, rnd);
   stars.material.opacity = 0;   // daytime by default; raise it for a night beat
@@ -191,6 +194,21 @@ const boot = (async () => {
     b.position.set(Math.cos(a) * r, TOP, Math.sin(a) * r);
     scene.add(b);
   }
+  // a far tree line: reads as depth through the haze, never competes with the subject
+  for (let i = 0; i < 14; i++) {
+    const a = rnd() * Math.PI * 2, r = 9 + rnd() * 16;
+    const far = K.pine(THREE, { h: 1.6 + rnd() * 1.2, rand: rnd });
+    far.position.set(Math.cos(a) * r, TOP - 0.05, Math.sin(a) * r);
+    far.rotation.y = rnd() * Math.PI;
+    scene.add(far);
+  }
+  // foreground tufts: a frame of depth at the bottom edge, so the empty grass is never flat
+  for (let i = 0; i < 5; i++) {
+    const a = 0.35 + i * 0.22 + rnd() * 0.1, r = 2.1 + rnd() * 0.9;
+    const tuft = K.bush(THREE, { h: 0.34 + rnd() * 0.12, rand: rnd });
+    tuft.position.set(Math.cos(a) * r, TOP - 0.02, Math.sin(a) * r);
+    scene.add(tuft);
+  }
 
   // ---- the thing that grows: a stem with two leaves, then a pine ---------
   const sprout = new THREE.Group();
@@ -204,11 +222,11 @@ const boot = (async () => {
   sprout.add(stem);
   const leaves = [-1, 1].map((s) => {
     const leaf = new THREE.Mesh(
-      K.roundBox(THREE, 0.30, 0.07, 0.14, 0.035, 2),
+      K.roundBox(THREE, 0.34, 0.10, 0.12, 0.04, 2),
       K.mat(THREE, K.PAL.grassLight, { flat: true, roughness: 0.9 })
     );
-    leaf.position.set(s * 0.15, 0.80, 0);
-    leaf.rotation.z = s * -0.72;
+    leaf.position.set(s * 0.17, 0.86, 0);
+    leaf.rotation.z = s * -0.5;
     leaf.castShadow = true;
     sprout.add(leaf);
     return leaf;
@@ -247,8 +265,8 @@ const boot = (async () => {
     // the character walks in, then idles facing the sprout
     const w = K.seg(t, B.walkIn[0], B.walkIn[1]);
     const walking = w > 0 && w < 1;
-    hero.group.position.x = K.lerp(-1.75, -0.65, K.easeInOut(w));
-    hero.group.position.z = 1.5;
+    hero.group.position.x = K.lerp(-2.35, -1.62, K.easeInOut(w));
+    hero.group.position.z = 1.55;
     hero.pose({
       walk: walking ? t * 1.7 : 0,
       bob: walking ? Math.abs(Math.sin(t * 11)) * 0.02 : Math.sin(t * 1.6) * 0.006,

@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>一颗种子，一座森林</title>
+
+<!--
+  THE SKELETON — copy this folder, edit the STORY block, render.
+  8 s · 1920×1080 · 60 fps · three.js from a CDN with a fallback chain.
+
+  Files:  index.html (this) · world-kit.js (art layer) · ui.js / ui.css (2D layer)
+  Vendor: run `node scripts/vendor-three.mjs .` once so vendor/gsap.min.js exists.
+          three.js itself comes from a CDN (jsDelivr → unpkg → npmmirror → ./vendor/…).
+-->
+
+<!-- GSAP is loaded inside the boot promise: vendor/ first, then a pinned CDN (see §0). -->
+<script src="world-kit.js"></script>
+<script src="ui.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div id="film" data-composition-id="seed-to-forest" data-width="1920" data-height="1080"
+     data-fps="60" data-duration="18">
+  <canvas id="gl" width="1920" height="1080"></canvas>
+  <div id="ui">
+    <div id="vig"></div>
+    <div id="veil"></div>
+    <div id="cap">
+      <div class="l1">一颗种子，一座森林。</div>
+      <div class="l2">ONE SEED · ONE FOREST</div>
+    </div>
+    <div id="hud"><span class="dot"></span><span class="t">SEED → FOREST · 18s</span></div>
+  </div>
+</div>
+
+<script type="module">
+/* ==================================================================== *
+ * 0 · dependencies — pinned version, CDN with a fallback chain
+ * ==================================================================== */
+// three.js is bundled (MIT, 718 KB) so a fresh clone renders offline with no setup:
+//   ./three/three.module.min.js  (imports ./three/three.core.min.js next to it)
+// If that copy is missing, the CDNs below are raced in parallel.
+const VENDOR_SOURCE = './three/three.module.min.js';
+const CDN_SOURCES = [
+  'https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.min.js',
+  'https://unpkg.com/three@0.181.2/build/three.module.min.js',
+  'https://cdn.npmmirror.com/packages/three/0.181.2/files/build/three.module.min.js',
+];
+const SOURCE_TIMEOUT = 12000;
+const withTimeout = (p, ms) => Promise.race([
+  p,
+  new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms)),
+]);
+async function loadThree() {
+  // A prepared project loads from disk: no network, no failed requests, instant boot.
+  try {
+    return { mod: await import(VENDOR_SOURCE), url: 'vendor' };
+  } catch (e) { /* not prepared — fall through to the CDNs */ }
+
+  // Otherwise race the CDNs: in parallel the cost is "the fastest healthy mirror",
+  // while a serial chain would multiply the wait by the number of dead sources.
+  const attempts = CDN_SOURCES.map((url) =>
+    withTimeout(import(url), SOURCE_TIMEOUT).then((mod) => ({ mod, url })));
+  try {
+    return await Promise.any(attempts);
+  } catch (e) {
+    const detail = (e && e.errors ? e.errors : [e]).map((x) => String(x && x.message || x)).join(' | ');
+    throw new Error('three.js unavailable — ' + detail + ' (run: node scripts/vendor-three.mjs .)');
+  }
+}
+
+/* gsap: a pinned CDN copy first (keeps the repository free of a non-OSI license),
+   then the local vendored copy written by `node scripts/vendor-three.mjs .` */
+const GSAP_CDN = [
+  'https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js',
+  'https://unpkg.com/gsap@3.12.5/dist/gsap.min.js',
+  'https://cdn.npmmirror.com/packages/gsap/3.12.5/files/dist/gsap.min.js',
+];
+// built at runtime so a checkout without vendor/ has no dangling file reference
+const GSAP_LOCAL = ['', 'vendor', 'gsap.min.js'].join('/');
+function injectScript(src, timeout = 12000) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    const timer = setTimeout(() => { s.remove(); rej(new Error('timeout ' + src)); }, timeout);
+    s.async = true;
+    s.src = src;
+    s.onload = () => { clearTimeout(timer); res(src); };
+    s.onerror = () => { clearTimeout(timer); s.remove(); rej(new Error('failed ' + src)); };
+    document.head.appendChild(s);
+  });
+}
+async function loadGsap() {
+  if (window.gsap) return 'preloaded';
+  const errors = [];
+  for (const url of [...GSAP_CDN, GSAP_LOCAL]) {
+    try {
+      await injectScript(url);
+      if (window.gsap) return url;
+    } catch (e) { errors.push(e.message); }
+  }
+  throw new Error('gsap unavailable — ' + errors.join(' | ') + ' (offline? run: node scripts/vendor-three.mjs .)');
+}
+
+const hudText = (msg, bad) => {
+  const hud = document.getElementById('hud');
+  if (!hud) return;
+  hud.style.opacity = '1';
+  hud.querySelector('.t').textContent = msg;
+  if (bad) hud.querySelector('.dot').style.background = '#d9534f';
+};
+const fail = (msg) => {
+  hudText(msg, true);
+  const veil = document.getElementById('veil');
+  if (veil) veil.style.opacity = '0.75';
+  throw new Error(msg);
+};
+
+/* ==================================================================== *
+ * 1 · STORY — the only block a film really edits.
+ *     Every beat is a VERB you can see. Camera keys are pure data.
+ * ==================================================================== */
+const STORY = {
+  duration: 18,
+  camera: [
+    { t: 0.0, pos: [3.05, 1.15, 3.45], look: [0, 0.30, 0], fov: 34 },   // down at the soil: a seed lands
+    { t: 3.0, pos: [3.25, 1.40, 3.65], look: [0, 0.85, 0], fov: 34 },   // the stem pushes up
+    { t: 6.5, pos: [4.60, 2.15, 5.50], look: [0, 0.95, 0], fov: 36 },   // green spreads across the plain
+    { t: 10.5, pos: [6.40, 3.10, 7.40], look: [0, 1.00, 0], fov: 38 },  // saplings everywhere
+    { t: 14.5, pos: [7.80, 4.20, 9.00], look: [0, 1.10, 0], fov: 40 },  // it is a forest
+    { t: 18.0, pos: [8.60, 4.90, 10.20], look: [0, 1.15, 0], fov: 40 }, // hold the wide shot under the caption
+  ],
+  beats: {
+    lightsUp: [0.25, 1.30],  // the scene comes up out of black
+    seedFall: [0.55, 1.35],  // a seed drops onto the soil
+    walkIn: [1.20, 3.00],    // the character crosses the frame and stops
+    stem: [2.40, 3.80],      // a stem pushes up out of the seed
+    leaves: [3.30, 4.60],    // two leaves unfold
+    tree: [4.60, 6.60],      // the sprout becomes a pine
+    grass: [4.90, 8.60],     // the brown plain turns green, outward from the seed
+    saplings: [7.20, 12.20], // young trees pop up across the ground
+    forest: [10.40, 14.80],  // they grow into a forest
+    glow: [15.10, 16.40],    // it is finished: a warm glow at the canopy
+  },
+};
+
+/* ==================================================================== *
+ * 2 · boot: fetch three, build the world once, hand back draw(t)
+ * ==================================================================== */
+let draw = null;
+
+const boot = (async () => {
+  // ---- three, from whichever source answers first -------------------------
+  const { mod: THREE, url: usedSource } = await loadThree();
+  if (!THREE) fail('three.js unavailable');
+
+  const K = window.WORLD_KIT;
+  if (!K) fail('world-kit.js missing');
+  if (!window.UI) fail('ui.js missing');
+
+  const W = 1920, H = 1080;
+  const renderer = K.makeRenderer(THREE, document.getElementById('gl'), { width: W, height: H });
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0d12);
+  // haze, not black: it dissolves the far edge of the ground into the sky
+  scene.fog = new THREE.Fog(0x9fb4c6, 16, 64);
+
+  const camera = new THREE.PerspectiveCamera(34, W / H, 0.05, 300);
+  const rig = K.lightRig(THREE, scene, { shadowSize: 8, shadowMap: 2048, key: 2.2, hemi: 0.85, rim: 0.5 });
+
+  // ---- world -------------------------------------------------------------
+  const rnd = K.rand(20261019);
+  const TOP = 0.2; // grass surface height
+
+  // A wide plateau: the ground never shows its rim, so the frame reads as landscape, not a puck.
+  // (ground() stacks a grass cap on a soil cylinder — keep its default depth so the cap stays on top)
+  const ground = K.ground(THREE, { size: 34 });
+  scene.add(ground);
+  const groundTop = ground.userData.top;
+  // cloned: this film animates the cap's colour, and K.mat() hands out shared materials
+  groundTop.material = groundTop.material.clone();
+  const SOIL = new THREE.Color(K.PAL.soil);
+  const GRASS = new THREE.Color(K.PAL.grass);
+  const sky = K.skyDome(THREE, { r: 120, top: K.PAL.skyTop, bottom: K.PAL.skyBottom });
+  scene.add(sky.mesh);
+  scene.add(K.sunOrMoon(THREE, { x: -19, y: 11, z: -30, size: 3.4 }));
+  scene.add(K.clouds(THREE, { count: 7, y: 30, spread: 150, rand: rnd }));
+
+  const stars = K.stars(THREE, 500, 90, rnd);
+  stars.material.opacity = 0;   // daytime by default; raise it for a night beat
+  scene.add(stars);
+
+  // props: kept BEHIND the subject (the camera sits at +x/+z) so they frame it, never hide it
+  for (let i = 0; i < 3; i++) {
+    const a = 2.15 + i * 0.95;                 // back-left → back-right
+    const r = 3.0 + rnd() * 0.7;
+    const tree = K.pine(THREE, { h: 1.0 + rnd() * 0.45, rand: rnd });
+    tree.position.set(Math.cos(a) * r, TOP, Math.sin(a) * r);
+    tree.rotation.y = rnd() * Math.PI;
+    scene.add(tree);
+  }
+  for (let i = 0; i < 2; i++) {
+    const a = 2.6 + i * 1.3, r = 2.7 + rnd() * 0.8;
+    const b = K.bush(THREE, { h: 0.9 + rnd() * 0.3, rand: rnd });
+    b.position.set(Math.cos(a) * r, TOP, Math.sin(a) * r);
+    scene.add(b);
+  }
+  // a far tree line: reads as depth through the haze, never competes with the subject
+  for (let i = 0; i < 14; i++) {
+    const a = rnd() * Math.PI * 2, r = 9 + rnd() * 16;
+    const far = K.pine(THREE, { h: 1.6 + rnd() * 1.2, rand: rnd });
+    far.position.set(Math.cos(a) * r, TOP - 0.05, Math.sin(a) * r);
+    far.rotation.y = rnd() * Math.PI;
+    scene.add(far);
+  }
+  // foreground tufts: a frame of depth at the bottom edge, so the empty grass is never flat
+  for (let i = 0; i < 5; i++) {
+    const a = 0.35 + i * 0.22 + rnd() * 0.1, r = 2.1 + rnd() * 0.9;
+    const tuft = K.bush(THREE, { h: 0.34 + rnd() * 0.12, rand: rnd });
+    tuft.position.set(Math.cos(a) * r, TOP - 0.02, Math.sin(a) * r);
+    scene.add(tuft);
+  }
+
+  // ---- the thing that grows: a stem with two leaves, then a pine ---------
+  const sprout = new THREE.Group();
+  sprout.position.set(0, TOP, 0);
+  const stem = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.026, 0.042, 1, 6),
+    K.mat(THREE, 0x5a8a3c, { flat: true, roughness: 0.95 })
+  );
+  stem.position.y = 0.5;
+  stem.castShadow = true;
+  sprout.add(stem);
+  const leaves = [-1, 1].map((s) => {
+    const leaf = new THREE.Mesh(
+      K.roundBox(THREE, 0.34, 0.10, 0.12, 0.04, 2),
+      K.mat(THREE, K.PAL.grassLight, { flat: true, roughness: 0.9 })
+    );
+    leaf.position.set(s * 0.17, 0.86, 0);
+    leaf.rotation.z = s * -0.5;
+    leaf.castShadow = true;
+    sprout.add(leaf);
+    return leaf;
+  });
+  scene.add(sprout);
+
+  const tree = K.pine(THREE, { h: 2.4, rand: rnd });
+  tree.position.set(0, TOP, 0);
+  tree.scale.setScalar(0.001);
+  scene.add(tree);
+
+  const glow = K.glowSprite(THREE, K.PAL.sun, 0.9, { soft: true, opacity: 0 });
+  glow.position.set(0, TOP + 2.3, 0);
+  scene.add(glow);
+
+  // ---- the seed ----------------------------------------------------------
+  const seed = new THREE.Mesh(
+    new THREE.SphereGeometry(0.085, 14, 12),
+    K.mat(THREE, 0x2c1d13, { roughness: 0.75 })
+  );
+  seed.castShadow = true;
+  scene.add(seed);
+
+  // ---- the forest: one instanced draw call per part, born at its own time --
+  const FOREST_N = 120;
+  const dummy = new THREE.Object3D();
+  const trunks = new THREE.InstancedMesh(
+    new THREE.CylinderGeometry(0.05, 0.075, 0.55, 5),
+    K.mat(THREE, 0x5b4433, { flat: true, roughness: 1 }), FOREST_N
+  );
+  const cones = new THREE.InstancedMesh(
+    new THREE.ConeGeometry(0.36, 1.25, 7),
+    K.mat(THREE, K.PAL.leafMid, { flat: true, roughness: 1 }), FOREST_N
+  );
+  trunks.castShadow = true;
+  cones.castShadow = true;
+  scene.add(trunks, cones);
+  const forest = [];
+  const CAM_AZ = Math.atan2(10.2, 8.6); // where the camera sits: keep a clear lane there
+  for (let i = 0; i < FOREST_N; i++) {
+    let a, r;
+    do {
+      // no trees on the actor's patch (r > 2.6) and none in the camera lane
+      a = rnd() * Math.PI * 2;
+      r = 2.6 + Math.pow(rnd(), 0.62) * 12.0;
+    } while (r > 4.2 && Math.abs(((a - CAM_AZ + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.42);
+    forest.push({
+      x: Math.cos(a) * r,
+      z: Math.sin(a) * r,
+      h: 0.9 + rnd() * 1.1,
+      rot: rnd() * Math.PI * 2,
+      // growth spreads outward: near trees are born first
+      birth: 7.2 + Math.pow(r / 14.6, 0.8) * 7.4 + rnd() * 0.8,
+    });
+  }
+
+  // ---- the character -----------------------------------------------------
+  const hero = K.mascot(THREE, { scale: 0.5 });
+  hero.group.position.set(-1.7, TOP, 1.5);
+  scene.add(hero.group);
+
+  const camPath = K.camPath(THREE, STORY.camera);
+
+  /* ---------------------------------------------------------------- *
+   * 3 · draw(t): pure function of time. No clocks, no unseeded random.
+   * ---------------------------------------------------------------- */
+  const B = STORY.beats;
+
+  draw = function (t) {
+    // lights come up out of black
+    // never a fully black first frame: a sliver of light is already on at t=0
+    const lit = 0.18 + 0.82 * K.easeOut(K.seg(t, B.lightsUp[0], B.lightsUp[1]));
+    rig.key.intensity = 2.2 * lit;
+    rig.hemi.intensity = 0.85 * lit;
+    rig.rim.intensity = 0.5 * lit;
+
+    // the character walks in, then idles facing the sprout
+    const w = K.seg(t, B.walkIn[0], B.walkIn[1]);
+    const walking = w > 0 && w < 1;
+    hero.group.position.x = K.lerp(-3.10, -2.60, K.easeInOut(w));
+    hero.group.position.z = 2.15;
+    hero.pose({
+      walk: walking ? t * 1.7 : 0,
+      bob: walking ? Math.abs(Math.sin(t * 11)) * 0.02 : Math.sin(t * 1.6) * 0.006,
+      // 3/4 toward camera, turning a little more toward the sprout as it arrives
+      look: K.lerp(0.55, 0.95, K.easeOut(w)),
+    });
+
+    // stage 1: the stem pushes up, two leaves unfold
+    const stemK = K.spring(K.seg(t, B.stem[0], B.stem[1]), 0.16);
+    sprout.scale.set(1, Math.max(0.001, stemK), 1);
+    leaves.forEach((leaf, i) => {
+      const k = K.spring(K.seg(t, B.leaves[0] + i * 0.16, B.leaves[1] + i * 0.16), 0.24);
+      leaf.scale.set(k, k, k);
+      leaf.rotation.z = (i ? 1 : -1) * (0.86 - 0.5 * k);
+    });
+
+    // stage 2: the sprout becomes a pine (hand off without a pop)
+    const treeK = K.spring(K.seg(t, B.tree[0], B.tree[1]), 0.14);
+    tree.scale.setScalar(Math.max(0.001, treeK));
+    tree.visible = treeK > 0.002;
+    const handOff = K.seg(t, B.tree[0], B.tree[0] + 0.9);
+    sprout.visible = treeK < 0.9;
+    sprout.scale.x = 1 - handOff * 0.6;
+    sprout.scale.z = 1 - handOff * 0.6;
+
+    // it is finished: a warm glow at the top
+    const glowK = K.seg(t, B.glow[0], B.glow[1]);
+    glow.material.opacity = glowK * 0.75;
+    glow.scale.setScalar(0.9 + glowK * 0.6);
+    glow.position.y = TOP + 2.4 * Math.min(1, treeK) + 0.12;
+
+    // stage 3a: a seed falls onto the bare soil, then is gone
+    const sf = K.seg(t, B.seedFall[0], B.seedFall[1]);
+    const falling = sf < 1;
+    seed.visible = falling;
+    if (falling) {
+      seed.position.set(0, K.lerp(3.6, TOP + 0.09, sf * sf), 0);
+      seed.scale.setScalar(1 + 0.15 * sf);
+      seed.rotation.x = sf * 3.2;
+    }
+
+    // stage 3b: the plain turns green, outward from the seed
+    const gk = K.easeInOut(K.seg(t, B.grass[0], B.grass[1]));
+    groundTop.material.color.copy(SOIL).lerp(GRASS, gk);
+
+    // stage 3c: young trees pop up, then grow into a forest (one instanced pair)
+    for (let i = 0; i < forest.length; i++) {
+      const f = forest[i];
+      const born = K.spring(K.seg(t, f.birth, f.birth + 1.15), 0.2);
+      const s = Math.max(0.001, born) * f.h;
+      dummy.position.set(f.x, TOP - 0.02 + 0.275 * s, f.z);
+      dummy.rotation.set(0, f.rot, 0);
+      dummy.scale.setScalar(s);
+      dummy.updateMatrix();
+      trunks.setMatrixAt(i, dummy.matrix);
+      dummy.position.y = TOP - 0.02 + 1.15 * s;
+      dummy.updateMatrix();
+      cones.setMatrixAt(i, dummy.matrix);
+    }
+    trunks.instanceMatrix.needsUpdate = true;
+    cones.instanceMatrix.needsUpdate = true;
+
+    // camera
+    camPath(camera, t);
+
+    // 2D layer (captions)
+    window.UI.frame(t);
+
+    renderer.render(scene, camera);
+  };
+
+  window.UI.mount({ duration: STORY.duration, captionIn: 14.4, captionInEnd: 15.1, captionOut: 17.1, captionOutEnd: 18.0 });
+  draw(0);
+})().catch((e) => {
+  const msg = String((e && e.message) || e);
+  hudText('boot failed: ' + msg, true);
+  throw e;
+});
+
+/* ==================================================================== *
+ * 4 · one paused timeline drives everything; the duration is the story
+ * ==================================================================== */
+const film = document.getElementById('film');
+const composeId = film.dataset.compositionId;
+const DURATION = Number(film.dataset.duration) || STORY.duration;
+
+const ready = boot.then(async () => {
+  await loadGsap();
+  const tl = window.gsap.timeline({ paused: true });
+  const proxy = { t: 0 };
+  Object.defineProperty(proxy, 't', {
+    get: () => proxy._t || 0,
+    set: (v) => { proxy._t = v; draw(v); },
+  });
+  tl.fromTo(proxy, { t: 0 }, { t: DURATION, duration: DURATION, ease: 'none', immediateRender: false }, 0);
+
+  // scene labels: they are the soundtrack's sections and your own rhythm sheet
+  tl.addLabel('scene:seed', 0)
+    .addLabel('scene:sprout', STORY.beats.stem[0])
+    .addLabel('scene:green', STORY.beats.grass[0])
+    .addLabel('scene:saplings', STORY.beats.saplings[0])
+    .addLabel('scene:forest', STORY.beats.forest[0])
+    .addLabel('scene:reveal', STORY.beats.glow[0])
+    .addLabel('scene:end', 15.6);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines[composeId] = tl;
+
+  // any renderer that is not huashu-motion can drive the film through this
+  window.film = {
+    duration: DURATION,
+    seek(t) { tl.pause(); tl.seek(t, false); draw(t); },
+    draw,
+    ready: true,
+  };
+
+  // huashu-motion (om) hooks: sound is declared here, not placed in an editor
+  if (window.OM && window.OM.music) {
+    window.OM.music({ product: 'explainer', style: 'mallet', bpm: 96, ending: 'ring',
+      energy: { seed: 0.3, sprout: 0.5, green: 0.62, saplings: 0.74, forest: 0.86, reveal: 0.95, end: 0.55 } });
+    [[0.55, 'whoosh'], [1.35, 'thud'], [2.40, 'riser', { dur: 1.3 }], [4.60, 'hit'],
+     [4.90, 'whoosh'], [7.20, 'pop'], [8.60, 'tick'], [10.40, 'hit'], [12.20, 'chime'],
+     [14.80, 'sparkle'], [15.10, 'chime'], [17.20, 'ding']]
+      .forEach(([t, name, opts]) => window.OM.sfx(name, t, opts));
+  }
+  return true; // NOT the timeline: a GSAP timeline is thenable, and returning it into a
+});            // promise chain makes the promise wait for the animation to finish — it never does.
+
+// tell every frame renderer to wait for the dependencies before sampling a frame
+window.__hf = window.__hf || {};
+window.__hf.buildReady = window.__hf.buildReady || {};
+window.__hf.buildReady['skeleton:deps'] = ready;
+if (window.OM && window.OM.ready) window.OM.ready(ready);
+</script>
+</body>
+</html>

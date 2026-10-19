@@ -8,8 +8,17 @@ out/
 vendor/
 **/vendor/
 
-# self-check stills (regenerate with `om still`)
+# generated self-checks and review frames (regenerate with `om still` / `qa-sheet.mjs`)
 **/_selfcheck/
+**/review/
+
+# local scratch
+_verify/
+**/_verify/
+
+# scratch stills (a leading underscore marks "not part of the repo")
+**/_*.png
+**/_*.jpg
 
 # agent/tool noise
 .om/
