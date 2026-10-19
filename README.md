@@ -82,7 +82,7 @@ git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-fi
 装好之后，当你说「把这段故事做成一条短片 / 做个构建片」，agent 会：
 
 1. 把故事改写成 8 拍（`references/01-story-to-beats.md`）
-2. 逐条翻译成叙事动作（`references/02-shot-grammar.md` 的 24 行动作字典）
+2. 逐条翻译成叙事动作（`references/02-shot-grammar.md` 的 27 行动作字典）
 3. 用 `assets/skeleton/` 搭世界，先做最难的镜头
 4. 冷审片（`references/06-review.md`），修一轮
 5. 出片、交付、写诚实清单
@@ -101,10 +101,13 @@ git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-fi
 | 亮 | 点亮 / 全景 | 用新的方式完成 |
 | 落点 | 一句话，停住 | 全景 + 一句话 |
 
+**时间怎么分**：8 拍只给骨架。38 秒的故事片按 HOOK 2s / 开场 4s / 第一次单位 4s / 累积 10s /
+转折 4.5s / 代价 3s / 落点 5.5s / 余韵 5s 排；换时长照比例缩放，见 `references/07-timing.md`。
+
 三条硬规则：
 
 1. **每个镜头必须有一个动词**（长出来 / 亮起来 / 塌下去）。没有动词的镜头删掉。
-2. **能量必须有形**：hook 在 3 秒内，burst 只有一个，暗拍必须真的暗。
+2. **能量必须有形**：hook 在前 2 秒提出问题，中段一次 burst，暗拍必须真的暗；峰在爆发还是落点看体裁（`references/07-timing.md`）。
 3. **每一帧都是时间的纯函数**：无 `Date.now`、无 `Math.random`、无跨帧状态。
 
 ## 仓库结构
@@ -113,11 +116,12 @@ git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-fi
 SKILL.md                    agent 入口：触发条件 + 六阶段 + 五条铁律
 references/
   01-story-to-beats.md      故事 → 8 拍 + 能量曲线 + 时长预算
-  02-shot-grammar.md        ★ 叙事动作 → 镜头语法（24 行字典，本仓库的核心）
+  02-shot-grammar.md        ★ 叙事动作 → 镜头语法（27 行字典，本仓库的核心）
   03-world-kit.md           世界套件 API：角色工厂 / 体素 / 道具 / 相机 / 灯光 / 性能
   04-timeline.md            时间线契约、确定性、接 om、没 om 怎么渲染
   05-sound-and-voice.md     配乐、音效打点、旁白与字幕
   06-review.md              冷审片流程 + 12 条验收 + 失败模式速查
+  07-timing.md              时间结构：八段的占比与秒数、体裁差异、自检 8 问
 assets/
   skeleton/                 ★ 能直接渲染的工程（8 秒示例片）
     index.html              组装壳：时间线 + STORY 块 + 字幕 + 音效打点
