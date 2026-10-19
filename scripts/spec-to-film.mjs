@@ -65,17 +65,64 @@ for (const r of ['hook', 'setup', 'accumulation', 'payoff', 'button']) {
   if (!roles.has(r)) bad(`缺 role=${r} 的段`);
 }
 
-// ---------- 4 · the scale ladder (build / hybrid must climb it) ----------
+// ---------- 4 · the scale ladder: every film, every genre (see 08-prompt-spec.md R1–R5) ----------
 const ORDER = { object: 0, cluster: 1, field: 2, world: 3 };
-if (spec.genre !== 'story' && Array.isArray(spec.ladder) && spec.ladder.length) {
-  let top = -1;
-  for (const s of stages) {
-    const v = ORDER[s.scale];
-    if (v == null) { warn(`${s.id}: scale=${s.scale} 不在阶梯里`); continue; }
-    if (v < top - 1) warn(`${s.id}: scale 回落（${s.scale}），构建片通常只升不降`);
-    top = Math.max(top, v);
+const lvl = (s) => ORDER[s.scale];
+const byRole = (r) => stages.filter((s) => s.role === r);
+
+for (const s of stages) {
+  if (ORDER[s.scale] == null) bad(`${s.id}: scale=${s.scale} 不在阶梯里（object/cluster/field/world）`);
+}
+
+// R3a: at least three distinct levels — a film that never leaves one level is monotonous
+const used = new Set(stages.map((s) => s.scale).filter((v) => ORDER[v] != null));
+if (used.size < 3) {
+  bad(`整片只用到 ${used.size} 个尺度级别（${[...used].join('/')}）——至少 3 级，否则一定单调（R3）`);
+}
+
+// R3b: the payoff must sit above the accumulation
+const acc = byRole('accumulation')[0];
+const pay = byRole('payoff')[0];
+if (acc && pay && lvl(pay) <= lvl(acc)) {
+  bad(`payoff(${pay.scale}) 不高于 accumulation(${acc.scale})——落点升一级才成立（R3）`);
+}
+
+// R2: adjacent levels in use must step by a quantity order, and counts must not go backwards
+const scaleSeq = [];
+for (const s of stages) {
+  if (ORDER[s.scale] == null) continue;
+  if (!scaleSeq.length || scaleSeq[scaleSeq.length - 1] !== s.scale) scaleSeq.push(s.scale);
+}
+for (let i = 1; i < scaleSeq.length; i++) {
+  if (lvl(scaleSeq[i]) < lvl(scaleSeq[i - 1]) - 1) {
+    warn(`${scaleSeq[i - 1]} → ${scaleSeq[i]} 是一次两级的下落，观众会以为切了另一条片`);
   }
-  if (top < 1) bad('构建/混合片的 scale 从未离开 object —— 这就是"单调"');
+}
+const counts = stages
+  .filter((s) => s.change && ['increment', 'light-up', 'grow', 'spread'].includes(s.change.kind))
+  .map((s) => ({ id: s.id, n: s.change.count || 0 }));
+for (let i = 1; i < counts.length; i++) {
+  if (counts[i].n > 0 && counts[i - 1].n > 0 && counts[i].n < counts[i - 1].n) {
+    warn(`${counts[i].id}: 数量 ${counts[i].n} 小于上一段 ${counts[i - 1].id} 的 ${counts[i - 1].n}（R2 要求不回落）`);
+  }
+}
+const bigJumps = counts.filter((c, i) => i > 0 && counts[i - 1].n > 0 && c.n >= counts[i - 1].n * 3).length;
+if (spec.genre !== 'story' && counts.length >= 2 && bigJumps === 0) {
+  warn('没有任何一次 ×3 的数量跃升（R2）——构建片靠跃升制造"变大"的体感');
+}
+
+// R5: a long accumulation has to run two tracks (add something, remove something)
+if (acc) {
+  const len = acc.t[1] - acc.t[0];
+  if (len > 8 && !(acc.change && acc.change.also)) {
+    bad(`${acc.id}: 累积段 ${len.toFixed(1)}s 只有单轨（只加不减）——超过 8s 必须有 change.also（R5）`);
+  }
+}
+
+// genre-specific: a story film still needs the "gap in one frame" shot (cost or payoff at field+)
+if (spec.genre === 'story') {
+  const cost = byRole('cost')[0];
+  if (cost && lvl(cost) < 2) warn(`cost(${cost.scale}) 建议放到 field/world：差距要同框才读得出`);
 }
 
 // ---------- 5 · what a renderer actually wants ----------

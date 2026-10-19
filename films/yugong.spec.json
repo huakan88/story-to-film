@@ -39,7 +39,7 @@
     },
     {
       "id": "build", "t": [10, 20], "role": "accumulation", "verb": "一趟一趟地搬", "scale": "cluster",
-      "change": { "kind": "increment", "count": 4, "what": "土堆每趟 +1 块（共 10 块），山的工作面每两趟退一列" },
+      "change": { "kind": "increment", "count": 4, "what": "土堆每趟 +1 块（共 10 块）", "also": { "kind": "subtract", "count": 2, "what": "山的工作面每两趟退一列" } },
       "camera": { "from": [2.7, 1.3, 3.1], "to": [2.5, 1.28, 2.9], "look": [0.2, 0.9, -3.2], "fov": 45 },
       "light": { "time": "day", "key": 1.0 },
       "caption": { "zh": "", "en": "" },

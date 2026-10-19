@@ -104,11 +104,15 @@ git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-fi
 **时间怎么分**：8 拍只给骨架。38 秒的故事片按 HOOK 2s / 开场 4s / 第一次单位 4s / 累积 10s /
 转折 4.5s / 代价 3s / 落点 5.5s / 余韵 5s 排；换时长照比例缩放，见 `references/07-timing.md`。
 
-三条硬规则：
+四条硬规则：
 
 1. **每个镜头必须有一个动词**（长出来 / 亮起来 / 塌下去）。没有动词的镜头删掉。
 2. **能量必须有形**：hook 在前 2 秒提出问题，中段一次 burst，暗拍必须真的暗；峰在爆发还是落点看体裁（`references/07-timing.md`）。
-3. **每一帧都是时间的纯函数**：无 `Date.now`、无 `Math.random`、无跨帧状态。
+3. **每个故事都要一条尺度阶梯**：选一个可分级动作（点亮 / 生长 / 建成 / 铺开 / 传播 / 计数 / 拆解），
+   排 object → cluster → field → world 四级，相邻级数量至少 ×3，全片跨 ≥3 级，落点高于累积，
+   镜头随级别退后；超过 8 秒的累积段要"一边加一边减"。**不做这一步的片子一定单调。**
+   写规格 → `node scripts/spec-to-film.mjs films/x.spec.json` 0 problem 才开渲（`references/08-prompt-spec.md`）。
+4. **每一帧都是时间的纯函数**：无 `Date.now`、无 `Math.random`、无跨帧状态。
 
 ## 仓库结构
 
@@ -135,6 +139,11 @@ scripts/
   qa-sheet.mjs              成片联络表（给冷审片看）
   selfcheck.mjs             仓库自检：结构 / 引用 / 确定性，不联网
   check-shotlist.mjs        shotlist.md 的时间列 ↔ data-duration 对账（分镜与代码不脱节）
+  spec-to-film.mjs          提示词规格解析：校验尺度阶梯/时间配比，并生成 STORY 代码
+ films/
+  yugong.spec.json          38 秒故事片的完整规格
+  reference-city.spec.json  参考片逆向：一盏灯 → 键盘 → 一片键帽 → 一座城（64 秒构建片）
+  counter-demo.spec.json    反例：全片停在一个尺度上，解析器应该拒绝它
   push-to-github.mjs        没有 git 也能发布（REST API 直推，支持删除）
 examples/
   seed-to-forest/           ★ 示例一（18 秒 · 构建片）：story.md + index.html + world-kit

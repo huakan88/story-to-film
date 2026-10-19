@@ -37,7 +37,7 @@
     },
     {
       "id": "world", "t": [22, 32], "role": "accumulation", "verb": "一个个键帽亮成一片", "scale": "cluster",
-      "change": { "kind": "light-up", "count": 12, "what": "12 个键帽依次亮起，每个一套小房子" },
+      "change": { "kind": "light-up", "count": 12, "what": "12 个键帽依次亮起，每个一套小房子", "also": { "kind": "subtract", "count": 4, "what": "键帽之间的暗区一块块消失" } },
       "camera": { "from": [1.1, 0.55, 1.3], "to": [2.4, 1.2, 3.0], "look": [0, 0.3, 0], "fov": 44 },
       "light": { "time": "night", "key": 0.5 },
       "caption": { "zh": "", "en": "" },
