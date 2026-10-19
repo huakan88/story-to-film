@@ -27,8 +27,11 @@ node scripts/vendor-three.mjs .    # 落地 vendor/three.* + vendor/gsap.min.js
 ```bash
 om still . --at 0.5,2,5,7.5   # 四张关键帧
 om check .                    # 结构/脚本/运动/文字检查（0 errors 才继续）
-om render . --fps 60          # → out/skeleton-v1.mp4
+om sound .                    # 配乐 + 音效：生成 assets/sound.wav，并把 <audio id="om-sound"> 写进 index.html
+om render . --fps 60          # → out/skeleton-v1.mp4（跳过 om sound 就是静音片）
 ```
+
+想先要一张片子看节奏、不要声音，可以只跑 `om render . --silent`。
 
 ## 规矩
 
@@ -36,4 +39,4 @@ om render . --fps 60          # → out/skeleton-v1.mp4
 - 时长只改 `index.html` 的 `data-duration` 与 `STORY.duration`（两处一致）。
 - 换主角：让 `WORLD_KIT.mascot` 返回同样的 `{ group, pose }`，场景代码不用动。
 - 字幕卡在下三分之一：`#cap` 默认 `display:none`，由 `UI.frame(t)` 按时间开关（透明但存在的文字框会被排版检查判为低对比度）。
-- `om check` 在这个模板上会留 2 条 `low-contrast` 警告，指向字幕的占位文案（0.00s，字幕此时并未显示）：视频上不可见，可以忽略。
+- `om check` 在这个模板上会留几条 `low-contrast` 警告，指向字幕的占位文案（例如 0.00s，字幕此时并未显示）：画面上不可见，可以忽略（判据见 `references/06-review.md`）。

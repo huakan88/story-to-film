@@ -10,6 +10,11 @@
 ▶ [`examples/seed-to-forest.mp4`](examples/seed-to-forest.mp4) — 18 秒示例（720p，1.2 MB）
 　 源码在 [`examples/seed-to-forest/`](examples/seed-to-forest/)：**完整工程**，可以照抄成自己的片子。
 
+▶ [`examples/moon-tree/demo.mp4`](examples/moon-tree/demo.mp4) — 第二个示例，31 秒**故事片**（角色 / 愿望 / 失败 / 换办法）：
+　 "等不到的月亮"矮个子够不到月亮 → 垒石头塔 → 塔塌 → 种下一颗树 → 月亮自己落到树梢。
+　 源码与 8 拍拆解在 [`examples/moon-tree/`](examples/moon-tree/)，它同时是 `references/02-shot-grammar.md`
+　 里大部分动作条目的出处。
+
 ---
 
 ## 它到底能做出什么
@@ -33,19 +38,25 @@ git clone https://github.com/huakan88/story-to-film && cd story-to-film
 
 # ① 先看成品：示例工程 18 秒，源码就是它自己
 om still  examples/seed-to-forest --at 1,6,12,17   # 四个关键时刻
+om sound  examples/seed-to-forest                  # 配乐：生成 assets/sound.wav 并写入 <audio>
 om render examples/seed-to-forest --fps 60         # → examples/seed-to-forest/out/*.mp4
 
 # ② 再看骨架（8 秒，最小可运行）
 om still  assets/skeleton --at 0.5,2,5,7.5
-om render assets/skeleton --fps 60
+om sound  assets/skeleton && om render assets/skeleton --fps 60
 
 # ③ 开一个新工程，改成你的故事
 node scripts/new-film.mjs my-film --title "一只猫的春天"
 cd my-film
 om still  . --at 1,6,11,16
+om sound  .                                     # 不做这步 → 成片是静音的
 om render . --fps 60                            # → out/my-film-v1.mp4
 ```
 
+> **先 `om sound`，再 `om render`。** 仓库里不放音频文件（版权 + 体积），`om sound` 会按
+> 页面里声明的 `OM.music(...)` / `OM.sfx(...)` 当场作曲，并把 `<audio id="om-sound">` 写进 `index.html`；
+> 跳过这一步，`om render` 出来是**静音片**。
+>
 > 没装 `om`（`huashu-motion` 的 CLI）也能出片：页面暴露了 `window.film.seek(t)`，
 > 任何能"seek + 截图"的无头浏览器都能逐帧渲染，再用 ffmpeg 合成
 > （见 `references/04-timeline.md`）。
@@ -56,7 +67,7 @@ om render . --fps 60                            # → out/my-film-v1.mp4
 
 ```bash
 git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-film
-# （或你所用工具的 skills 目录）
+# （或你所用工具的 skills 目录；没有 git 就直接下 Code → Download ZIP 解压到同一位置）
 ```
 
 装好之后，当你说「把这段故事做成一条短片 / 做个构建片」，agent 会：
@@ -107,26 +118,43 @@ assets/
   beats-template.md         一页纸分镜表（复制填写）
 scripts/
   new-film.mjs              从骨架新建一个工程
-  vendor-three.mjs          冻结 three/gsap 到本地
+  vendor-three.mjs          冻结 three/gsap 到本地（离线、可复现）
   qa-sheet.mjs              成片联络表（给冷审片看）
+  selfcheck.mjs             仓库自检：结构 / 引用 / 确定性，不联网
+  push-to-github.mjs        没有 git 也能发布（REST API 直推，支持删除）
 examples/
-  seed-to-forest/            ★ 完整示例工程（18 秒）：story.md + index.html + ui + world-kit
+  seed-to-forest/           ★ 示例一（18 秒 · 构建片）：story.md + index.html + world-kit
   seed-to-forest.mp4         示例成片（720p / 30fps 预览版，源码渲染的是 1080p60）
+  moon-tree/                ★ 示例二（31 秒 · 故事片）：story.md + shotlist.md + 工程 + demo.mp4
   poster.jpg / sheet.jpg     海报帧 + 联络表
+CONTRIBUTING.md             改方法 / 改代码 / 发布的三套规矩
 ```
 
 ## 这份仓库验证过什么
 
-在 Windows + Chrome + `om`（huashu-motion 0.1.0）上实测：
+在 Windows + Chrome + `om`（huashu-motion 0.1.0）上实测，包括**从 GitHub 取一份干净拷贝**跑一遍：
 
 | 项 | 结果 |
 |---|---|
-| `om check examples/seed-to-forest` | **0 errors**，2 条字幕占位文案的 `low-contrast` 警告（该时刻字幕未显示，画面上不可见） |
+| 干净拷贝（3 MB，仅仓库文件） | `om still` / `om check` / `node scripts/*.mjs` 全部可用，无缺文件 |
+| `node scripts/selfcheck.mjs` | 3 个工程全过（结构 / 引用 / 确定性，<1 秒，不联网） |
+| `om check examples/seed-to-forest` | **0 errors**；3 条 `low-contrast` 是字幕尚未显示时刻的误报（判据见 `references/06-review.md`） |
+| `om check examples/moon-tree` | 0 errors（同一条误报） |
 | `om render examples/seed-to-forest --fps 60` | 18 秒 / 1920×1080 / 60fps → 1080p 成片约 6.6 MB |
-| 渲染成本 | 1080p60 约 **140 ms/帧**（18s ≈ 2.5 分钟；30s ≈ 4 分钟） |
-| 骨架冷启动 | 本地 `three/` 优先，无网络请求；CDN 兜底时首次约 5 秒 |
-| `node scripts/new-film.mjs` | 生成干净的工程（自动排除 `_selfcheck/`、`vendor/`、`out/`），composition id 用目录名 slug |
+| 渲染成本 | 1080p60 约 **140 ms/帧**（18s ≈ 2.5 分钟；31s ≈ 4.5 分钟；64s ≈ 9 分钟） |
+| 骨架冷启动 | 本地 `three/`（随仓库分发）优先，零网络请求；只有 GSAP 走 CDN（约 1.8 秒），失败会回退本地 `vendor/` 并 HUD 报错 |
+| `node scripts/new-film.mjs` | 生成干净工程（排除 `_*`/`vendor/`/`out/`），composition id 用目录名 slug，three 一并拷好 |
 | `node scripts/qa-sheet.mjs` | 任意 mp4 → 联络表 + 5 张关键帧，供冷审片使用 |
+| `node scripts/push-to-github.mjs --dry` | 列出将上传/删除的文件；`git` 连不上 GitHub 时用它发布 |
+
+## 维护
+
+- 改 `world-kit.js`；`assets/skeleton/` 与每个 `examples/*/` 各有一份拷贝（工程要能单独拷走），
+  改完复制过去并重跑它们的 still。
+- 提交前：`node scripts/selfcheck.mjs` → `om check` → 看三张 still。CI（GitHub Actions）只跑
+  `selfcheck.mjs`，因为它不需要浏览器和显卡。
+- 发布：`node scripts/push-to-github.mjs --owner <you> --repo <repo> --dry` 看清单，去掉 `--dry` 执行
+  （按"目录即真相"推送：本地没有的文件会在远端删除）。细节见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 依赖
 

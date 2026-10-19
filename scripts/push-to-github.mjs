@@ -135,7 +135,10 @@ for (const f of upload) {
   });
   entries.push({ path: f.rel, mode: '100644', type: 'blob', sha: blob.sha });
 }
-const keep = [...remoteFiles.entries()].filter(([p]) => localPaths.has(p));
+// Files that did not change keep their existing blob — but never re-add a path we just uploaded,
+// or the stale entry would appear later in the tree array and silently win.
+const uploaded = new Set(entries.map((e) => e.path));
+const keep = [...remoteFiles.entries()].filter(([p]) => localPaths.has(p) && !uploaded.has(p));
 const tree = await api('POST', `/repos/${owner}/${repo}/git/trees`, {
   tree: [...entries, ...keep.map(([path, sha]) => ({ path, mode: '100644', type: 'blob', sha }))],
 });
@@ -154,3 +157,14 @@ if (remoteHead) {
 }
 console.log(`\n✓ pushed ${upload.length} blob(s), ${deletions.length} deletion(s)`);
 console.log(`  https://github.com/${owner}/${repo}/commit/${commit.sha}`);
+
+// ---------- verify: every local file must now be the remote blob ----------
+const after = await api('GET', `/repos/${owner}/${repo}/git/trees/${tree.sha}?recursive=1`);
+const remoteNow = new Map((after.tree || []).filter((t) => t.type === 'blob').map((t) => [t.path, t.sha]));
+const wrong = files.filter((f) => remoteNow.get(f.rel) !== f.sha);
+if (wrong.length) {
+  console.error('\n✗ verification failed — these paths are not what you uploaded:');
+  for (const f of wrong) console.error(`    ${f.rel}  local ${f.sha.slice(0, 8)} vs remote ${String(remoteNow.get(f.rel)).slice(0, 8)}`);
+  process.exit(1);
+}
+console.log(`  verified: ${files.length} remote blob(s) match the local files`);

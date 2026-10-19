@@ -82,7 +82,14 @@ const camPath = L.camPath(THREE, [
 camPath(camera, t);                       // 纯 t 的相机运动，段间 easeInOut
 
 const rig = L.lightRig(THREE, scene, { key: 2.6, hemi: .75, shadowSize: 9, shadowMap: 2048 });
-// → { hemi, key, rim }；黄昏时把 key 降、rim 升（rim 是暖色补光，别一起降）
+// → { hemi, key, rim, fill, sync }；黄昏时把 key 降、rim 升（rim 是暖色补光，别一起降）
+
+// 逆光/夜景时，角色的正面会是一块黑剪影（这是场景片最常翻车的地方）：
+const rig2 = L.lightRig(THREE, scene, {
+  key: 3.1, keyColor: 0xd5e2ff, kx: 4, ky: 9, kz: -7,   // 光从月亮那侧来
+  fill: 1.1, fillColor: 0x9fb6d8,                        // 相机侧补光，默认关闭（fill: 0）
+});
+rig2.sync(camera);        // 每帧调用一次：补光跟着镜头走，人物永远不是剪影
 
 const renderer = L.makeRenderer(THREE, canvas, { width: 1920, height: 1080 });
 ```

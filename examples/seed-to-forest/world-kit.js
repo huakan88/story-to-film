@@ -467,7 +467,22 @@
     const rim = new THREE.DirectionalLight(o.rimColor == null ? 0x9fc4ff : o.rimColor, o.rim == null ? 0.5 : o.rim);
     rim.position.set(-14, 10, -18);
     scene.add(rim);
-    return { hemi, key, rim };
+    // Fill that rides with the camera. Backlit or night shots otherwise read as a black cut-out where
+    // the character faces the lens; a fill from the camera side fixes it without flattening the key.
+    // Off by default (fill: 0). Call rig.sync(camera) once per frame in draw(t).
+    const fillOn = o.fill != null && o.fill > 0;
+    const fill = new THREE.DirectionalLight(o.fillColor == null ? 0x9fb6d8 : o.fillColor, o.fill || 0);
+    fill.position.set(0, 6, 14);
+    scene.add(fill);
+    const rig = { hemi, key, rim, fill };
+    rig.sync = function (camera) {
+      if (!fillOn || !camera) return rig;
+      const d = o.fillDist == null ? 1 : o.fillDist;
+      const p = camera.position;
+      fill.position.set(p.x * d, p.y * d + (o.fillLift == null ? 2 : o.fillLift), p.z * d);
+      return rig;
+    };
+    return rig;
   };
 
   K.makeRenderer = function (THREE, canvas, opts) {

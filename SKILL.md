@@ -13,6 +13,8 @@ description: >-
 一个工程 = 一个 `index.html`（一条暂停的 GSAP 时间线 + 一个 `draw(t)`）+ 一个世界套件 `lib3d.js`。
 
 模板工程：`assets/skeleton/`（能直接渲染）。分镜表：`assets/beats-template.md`。
+两个可抄的成品：`examples/seed-to-forest/`（18 秒构建片）、`examples/moon-tree/`（31 秒故事片，
+带 `shotlist.md`，是 `references/02-shot-grammar.md` 大部分条目的出处）。
 
 ## 先判断：这个故事适合哪种体裁
 
@@ -60,9 +62,10 @@ description: >-
 ## 上手命令
 
 ```bash
-node scripts/vendor-three.mjs .        # 可选：把 three/gsap 冻结到本地（离线、可复现）
+node scripts/selfcheck.mjs .           # 结构/引用/确定性（不联网，<1s；改完先跑这个）
 om still  . --at 1,6,11,16             # 关键帧
-om check  .                            # 结构/脚本/运动/文字检查
+om check  .                            # 结构/脚本/运动/文字检查（两个已知误报见 06-review）
+om sound  .                            # 配乐 + 音效（不跑这步，成片是静音的）
 om render . --fps 60                   # 出片（没装 om 就 --silent，或换任意 headless-Chrome 渲染器）
 node scripts/qa-sheet.mjs out/x.mp4    # 4 秒一格联络表，给冷审片看
 ```
