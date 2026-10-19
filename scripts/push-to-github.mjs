@@ -33,6 +33,8 @@ const skip = (rel) => {
   if (ALL) return false;
   const parts = rel.split('/');
   if (parts.some((p) => SKIP_DIRS.has(p))) return true;
+  if (/(^|\/)assets\/sound\.wav$/.test(rel)) return true;              // `om sound` output, regenerated
+  if (/\.mp4$/.test(rel) && !/(^|\/)examples\/.*\.mp4$/.test(rel)) return true; // keep the demo previews
   return parts.some((p) => p.startsWith('_')) || /^(Thumbs\.db|\.DS_Store)$/.test(parts.at(-1));
 };
 

@@ -3,6 +3,12 @@ out/
 **/out/
 *.mp4
 !examples/*.mp4
+!examples/**/demo.mp4
+
+# generated soundtrack (`om sound` writes it from the page's OM.music/OM.sfx declarations;
+# a 8 s film is ~1.5 MB, a 31 s film ~5.7 MB — never commit it)
+assets/sound.wav
+**/assets/sound.wav
 
 # vendored deps (fetch with scripts/vendor-three.mjs instead)
 vendor/
