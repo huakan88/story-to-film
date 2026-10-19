@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>等不到的月亮</title>
+
+<!--
+  THE SKELETON — copy this folder, edit the STORY block, render.
+  8 s · 1920×1080 · 60 fps · three.js from a CDN with a fallback chain.
+
+  Files:  index.html (this) · world-kit.js (art layer) · ui.js / ui.css (2D layer)
+  Vendor: run `node scripts/vendor-three.mjs .` once so vendor/gsap.min.js exists.
+          three.js itself comes from a CDN (jsDelivr → unpkg → npmmirror → ./vendor/…).
+-->
+
+<!-- GSAP is loaded inside the boot promise: vendor/ first, then a pinned CDN (see §0). -->
+<!--
+  The huashu-motion runtime (window.OM) is injected by the renderer, so this page needs no copy of
+  om.js: every use below is guarded with `if (window.OM && …)`. If you open the page in a plain
+  browser and want `om sound`-style helpers, add huashu-motion's om.js here yourself.
+-->
+<script src="world-kit.js"></script>
+<script src="ui.js"></script>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div id="film" data-composition-id="moon-tree" data-width="1920" data-height="1080"
+     data-fps="60" data-duration="31">
+  <!--
+    No <audio> here on purpose: this repository does not ship the 5.7 MB soundtrack, and a dangling
+    src is a hard `om check` error. `om sound .` regenerates assets/sound.wav from the OM.music/OM.sfx
+    declarations near the bottom of this file and inserts the <audio id="om-sound"> tag itself; `om render`
+    runs that step first, so the render has music either way.
+  -->
+  <canvas id="gl" width="1920" height="1080"></canvas>
+  <div id="ui">
+    <div id="vig"></div>
+    <div id="veil"></div>
+    <div id="grade"></div>
+    <div id="cap">
+      <div class="l1">它没长高，是树替它够到了月亮。</div>
+      <div class="l2">IT NEVER GREW · THE TREE DID</div>
+    </div>
+    <div id="hud"><span class="dot"></span><span class="t">等不到的月亮 · 31s</span></div>
+  </div>
+</div>
+
+<script type="module">
+/* ==================================================================== *
+ * 0 · dependencies — pinned version, CDN with a fallback chain
+ * ==================================================================== */
+// three.js is bundled (MIT, 718 KB) so a fresh clone renders offline with no setup:
+//   ./three/three.module.min.js  (imports ./three/three.core.min.js next to it)
+// If that copy is missing, the CDNs below are raced in parallel.
+const VENDOR_SOURCE = './three/three.module.min.js';
+const CDN_SOURCES = [
+  'https://cdn.jsdelivr.net/npm/three@0.181.2/build/three.module.min.js',
+  'https://unpkg.com/three@0.181.2/build/three.module.min.js',
+  'https://cdn.npmmirror.com/packages/three/0.181.2/files/build/three.module.min.js',
+];
+const SOURCE_TIMEOUT = 12000;
+const withTimeout = (p, ms) => Promise.race([
+  p,
+  new Promise((_, rej) => setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms)),
+]);
+async function loadThree() {
+  // A prepared project loads from disk: no network, no failed requests, instant boot.
+  try {
+    return { mod: await import(VENDOR_SOURCE), url: 'vendor' };
+  } catch (e) { /* not prepared — fall through to the CDNs */ }
+
+  // Otherwise race the CDNs: in parallel the cost is "the fastest healthy mirror",
+  // while a serial chain would multiply the wait by the number of dead sources.
+  const attempts = CDN_SOURCES.map((url) =>
+    withTimeout(import(url), SOURCE_TIMEOUT).then((mod) => ({ mod, url })));
+  try {
+    return await Promise.any(attempts);
+  } catch (e) {
+    const detail = (e && e.errors ? e.errors : [e]).map((x) => String(x && x.message || x)).join(' | ');
+    throw new Error('three.js unavailable — ' + detail + ' (run: node scripts/vendor-three.mjs .)');
+  }
+}
+
+/* gsap: a pinned CDN copy first (keeps the repository free of a non-OSI license),
+   then the local vendored copy written by `node scripts/vendor-three.mjs .` */
+const GSAP_CDN = [
+  'https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js',
+  'https://unpkg.com/gsap@3.12.5/dist/gsap.min.js',
+  'https://cdn.npmmirror.com/packages/gsap/3.12.5/files/dist/gsap.min.js',
+];
+// built at runtime so a checkout without vendor/ has no dangling file reference
+const GSAP_LOCAL = ['', 'vendor', 'gsap.min.js'].join('/');
+function injectScript(src, timeout = 12000) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    const timer = setTimeout(() => { s.remove(); rej(new Error('timeout ' + src)); }, timeout);
+    s.async = true;
+    s.src = src;
+    s.onload = () => { clearTimeout(timer); res(src); };
+    s.onerror = () => { clearTimeout(timer); s.remove(); rej(new Error('failed ' + src)); };
+    document.head.appendChild(s);
+  });
+}
+async function loadGsap() {
+  if (window.gsap) return 'preloaded';
+  const errors = [];
+  for (const url of [...GSAP_CDN, GSAP_LOCAL]) {
+    try {
+      await injectScript(url);
+      if (window.gsap) return url;
+    } catch (e) { errors.push(e.message); }
+  }
+  throw new Error('gsap unavailable — ' + errors.join(' | ') + ' (offline? run: node scripts/vendor-three.mjs .)');
+}
+
+const hudText = (msg, bad) => {
+  const hud = document.getElementById('hud');
+  if (!hud) return;
+  hud.style.opacity = '1';
+  hud.querySelector('.t').textContent = msg;
+  if (bad) hud.querySelector('.dot').style.background = '#d9534f';
+};
+const fail = (msg) => {
+  hudText(msg, true);
+  const veil = document.getElementById('veil');
+  if (veil) veil.style.opacity = '0.75';
+  throw new Error(msg);
+};
+
+/* ==================================================================== *
+ * 1 · STORY — the only block a film really edits.
+ *     Every beat is a VERB you can see. Camera keys are pure data.
+ * ==================================================================== */
+const STORY = {
+  duration: 31,
+  camera: [
+    { t: 0.0, pos: [4.00, 1.80, 5.90], look: [0.20, 2.40, -0.70], fov: 44 },  // the moon top right, it small below
+    { t: 4.0, pos: [3.95, 1.70, 5.50], look: [0.15, 2.00, -0.35], fov: 41 },  // it walks to the patch
+    { t: 6.5, pos: [3.70, 1.85, 5.30], look: [0.05, 2.35, -0.25], fov: 40 },  // first stones land
+    { t: 9.0, pos: [3.65, 2.20, 5.25], look: [0.02, 2.55, -0.30], fov: 39 },  // the tower climbs
+    { t: 12.0, pos: [3.55, 2.75, 5.35], look: [0.02, 3.00, -0.45], fov: 39 }, // it hops up
+    { t: 13.3, pos: [3.45, 3.00, 5.40], look: [0.05, 3.25, -0.70], fov: 39 }, // on top
+    { t: 15.0, pos: [3.40, 3.15, 5.40], look: [0.10, 3.85, -1.10], fov: 40 }, // tiptoe: hand and moon in one frame
+    { t: 16.2, pos: [3.20, 2.30, 4.95], look: [0.05, 1.35, -0.30], fov: 40 }, // the tower goes down
+    { t: 18.0, pos: [3.10, 1.85, 4.85], look: [0.05, 0.90, -0.15], fov: 37 },
+    { t: 20.0, pos: [2.85, 1.50, 4.55], look: [0.00, 0.50, -0.05], fov: 33 }, // pressing the seed
+    { t: 22.0, pos: [3.15, 1.65, 4.90], look: [0.05, 1.00, -0.15], fov: 34 },
+    { t: 24.5, pos: [3.45, 2.15, 5.30], look: [0.05, 1.95, -0.30], fov: 36 }, // the tree climbs
+    { t: 27.0, pos: [3.75, 2.85, 5.70], look: [0.10, 2.95, -0.70], fov: 38 },
+    { t: 29.2, pos: [4.30, 2.55, 6.70], look: [0.00, 3.05, -0.60], fov: 42 }, // the moon sits on the tip
+    { t: 31.0, pos: [4.40, 2.60, 6.85], look: [0.00, 3.00, -0.60], fov: 42 }, // hold
+  ],
+  beats: {
+    lift: [0.25, 1.30],      // fade up from black
+    reach1: [1.10, 2.60],    // it reaches for the moon, cannot
+    walkIn: [3.60, 4.90],    // to the patch
+    stack: [4.35, 10.47],    // stones land, one layer at a time (7 layers, 1.02 s apart)
+    climb: [11.40, 12.65],   // it hops up onto the tower
+    tiptoe: [12.95, 14.15],  // one more reach, still short
+    collapse: [15.00, 16.20],// the tower comes apart
+    dull: [15.15, 16.40],    // the picture loses its colour
+    crouch: [18.10, 18.90],  // it kneels
+    seed: [19.10, 19.80],    // the last seed goes into the soil
+    leave: [20.10, 22.00],   // it turns and walks away
+    sprout: [22.10, 23.40],  // the seed pushes out
+    trunk: [22.60, 26.60],   // the trunk climbs
+    crown: [25.20, 27.00],   // the crown fills in
+    moonFall: [27.20, 29.20],// the moon slides down onto the tip
+    return: [29.10, 30.10],  // it comes back
+    sit: [30.10, 30.70],     // and sits under it
+  },
+};
+
+/* ==================================================================== *
+ * 2 · boot: fetch three, build the world once, hand back draw(t)
+ * ==================================================================== */
+let draw = null;
+
+const boot = (async () => {
+  // ---- three, from whichever source answers first -------------------------
+  const { mod: THREE, url: usedSource } = await loadThree();
+  if (!THREE) fail('three.js unavailable');
+
+  const K = window.WORLD_KIT;
+  if (!K) fail('world-kit.js missing');
+  if (!window.UI) fail('ui.js missing');
+
+  const W = 1920, H = 1080;
+  const renderer = K.makeRenderer(THREE, document.getElementById('gl'), { width: W, height: H, exposure: 1.26 });
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a1018);
+  scene.fog = new THREE.Fog(0x25344a, 18, 70);
+
+  const camera = new THREE.PerspectiveCamera(34, W / H, 0.05, 300);
+  const rig = K.lightRig(THREE, scene, {
+    shadowSize: 11, shadowMap: 2048, key: 3.1, hemi: 1.35, rim: 0.55,
+    kx: 4, ky: 9, kz: -7,                       // the moonlight comes from the moon's side
+    keyColor: 0xd5e2ff, sky: 0x44618a, ground: 0x3c4248,
+    fill: 1.1, fillColor: 0x9fb6d8,             // camera-side fill: the face must not be a cut-out
+  });
+  const KEY_NIGHT = new THREE.Color(0xc9d8ff);
+  const KEY_WARM = new THREE.Color(0xffdca8);
+
+  // ---- world -------------------------------------------------------------
+  const rnd = K.rand(20261019);
+  const TOP = 0.2; // grass surface height
+
+  const ground = K.ground(THREE, { size: 34 });
+  scene.add(ground);
+  const groundTop = ground.userData.top;
+  groundTop.material = groundTop.material.clone();
+  groundTop.material.color.set(0x3a5f4b);   // a night meadow: dark, still green
+
+  const sky = K.skyDome(THREE, { r: 140, top: 0x111d33, bottom: 0x38506f });
+  scene.add(sky.mesh);
+
+  const stars = K.stars(THREE, 900, 110, rnd);
+  stars.material.opacity = 0.92;
+  scene.add(stars);
+
+  // ---- the moon: a disc that reads at any distance, plus a soft halo ------
+  const MOON_HOME = new THREE.Vector3(1.75, 6.40, -4.60);
+  const MOON_TIP = new THREE.Vector3(0.15, 5.05, -1.30);
+  const moon = new THREE.Mesh(
+    new THREE.SphereGeometry(0.52, 26, 18),
+    K.mat(THREE, 0xdfe7ff, { roughness: 1, emissive: 0xdfe7ff, emissiveIntensity: 0.9 })
+  );
+  moon.position.copy(MOON_HOME);
+  scene.add(moon);
+  const moonGlow = K.glowSprite(THREE, 0xcfe0ff, 3.8, { soft: true, opacity: 0.5 });
+  moonGlow.position.copy(MOON_HOME);
+  scene.add(moonGlow);
+
+  // the camera-side fill now comes from the kit (rig.fill + rig.sync(camera) in draw(t))
+
+  // props: only far silhouettes — the play area stays empty so the tower and the tree own it
+  for (let i = 0; i < 12; i++) {
+    const a = rnd() * Math.PI * 2, r = 20 + rnd() * 14;
+    const far = K.pine(THREE, { h: 1.4 + rnd() * 1.0, rand: rnd });
+    far.position.set(Math.cos(a) * r, TOP - 0.05, Math.sin(a) * r);
+    far.rotation.y = rnd() * Math.PI;
+    scene.add(far);
+  }
+  // foreground tufts: a frame of depth at the bottom edge
+  for (let i = 0; i < 6; i++) {
+    const a = 0.25 + i * 0.2 + rnd() * 0.08, r = 2.0 + rnd() * 1.0;
+    const tuft = K.bush(THREE, { h: 0.30 + rnd() * 0.12, rand: rnd });
+    tuft.position.set(Math.cos(a) * r, TOP - 0.02, Math.sin(a) * r);
+    scene.add(tuft);
+  }
+
+  // ---- the tower: 7 layers, every block carries its own birth and collapse impulse ----
+  const LAYER_H = 0.36, LAYERS = 7, TOWER_X = 0.0, TOWER_Z = 0.0;
+  const stoneCols = [0x8a847b, 0x6f6a63, 0x9a9187, 0x5b5650];
+  const stones = [];
+  for (let i = 0; i < LAYERS; i++) {
+    const per = i === 0 ? 2 : 1;                     // a wider base, single blocks above
+    for (let j = 0; j < per; j++) {
+      const w = 0.44 - i * 0.028;
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w * (0.9 + rnd() * 0.2), LAYER_H * 0.9, w * (0.85 + rnd() * 0.25)),
+        K.mat(THREE, stoneCols[Math.floor(rnd() * stoneCols.length)], { flat: true, roughness: 0.95 })
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const ox = (j - (per - 1) / 2) * w * 0.52 + (rnd() - 0.5) * 0.04;
+      const oz = (rnd() - 0.5) * 0.06;
+      const rotY = (rnd() - 0.5) * 0.4;
+      mesh.position.set(TOWER_X + ox, TOP + LAYER_H * (i + 0.5), TOWER_Z + oz);
+      mesh.rotation.y = rotY;
+      scene.add(mesh);
+      stones.push({
+        mesh, rotY,
+        home: new THREE.Vector3(TOWER_X + ox, TOP + LAYER_H * (i + 0.5), TOWER_Z + oz),
+        birth: 4.35 + i * 1.02 + j * 0.12,
+        vx: (rnd() - 0.5) * 2.4, vz: -0.45 - rnd() * 1.5,
+        spin: (rnd() - 0.5) * 6, delay: rnd() * 0.16,
+      });
+    }
+  }
+  const TOWER_TOP = TOP + LAYER_H * LAYERS;
+
+  // ---- the seed it plants, and the sprout that proves it took -------------
+  const seed = new THREE.Mesh(
+    new THREE.SphereGeometry(0.075, 12, 10),
+    K.mat(THREE, 0x4a3a24, { roughness: 0.8 })
+  );
+  seed.castShadow = true;
+  scene.add(seed);
+
+  const sprout = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.02, 0.035, 0.42, 5),
+    K.mat(THREE, 0x5a8a3c, { flat: true, roughness: 0.95 })
+  );
+  sprout.geometry.translate(0, 0.21, 0);             // grow from the soil, not from the centre
+  sprout.position.set(0.12, TOP, -0.15);
+  sprout.castShadow = true;
+  scene.add(sprout);
+
+  // ---- the tree: a trunk that climbs, four branches in sequence, a crown --
+  const treeGroup = new THREE.Group();
+  treeGroup.position.set(0.12, TOP, -0.15);
+  treeGroup.rotation.z = -0.05;                       // it leans a little toward the moon
+  scene.add(treeGroup);
+
+  const TRUNK_H = 4.55;
+  const trunkGeo = new THREE.CylinderGeometry(0.075, 0.17, TRUNK_H, 7);
+  trunkGeo.translate(0, TRUNK_H / 2, 0);
+  const trunk = new THREE.Mesh(trunkGeo, K.mat(THREE, 0x4a3a2b, { flat: true, roughness: 1 }));
+  trunk.castShadow = true;
+  treeGroup.add(trunk);
+
+  const BRANCHES = [
+    { at: 23.30, y: 1.30, ang: 0.95, len: 1.05, spin: 0.4 },
+    { at: 24.05, y: 2.05, ang: -1.00, len: 0.95, spin: -0.5 },
+    { at: 24.75, y: 2.80, ang: 0.70, len: 0.85, spin: 0.9 },
+    { at: 25.35, y: 3.45, ang: -0.55, len: 0.70, spin: -0.7 },
+  ].map((b) => {
+    const pivot = new THREE.Group();
+    pivot.position.y = b.y;
+    pivot.rotation.set(0, b.spin, b.ang);
+    const geo = new THREE.CylinderGeometry(0.028, 0.06, b.len, 5);
+    geo.translate(0, b.len / 2, 0);
+    const br = new THREE.Mesh(geo, K.mat(THREE, 0x4a3a2b, { flat: true, roughness: 1 }));
+    br.castShadow = true;
+    br.scale.y = 0.001;
+    pivot.add(br);
+    treeGroup.add(pivot);
+    return { br, at: b.at };
+  });
+
+  const leafMat = K.mat(THREE, 0x3f6b46, { flat: true, roughness: 0.95 });
+  const CROWN = [
+    { at: 25.10, p: [0.55, 2.00, 0.10], r: 0.50 },
+    { at: 25.50, p: [-0.55, 2.50, -0.10], r: 0.44 },
+    { at: 25.90, p: [0.20, 3.10, 0.12], r: 0.52 },
+    { at: 26.30, p: [-0.30, 3.70, -0.08], r: 0.44 },
+    { at: 26.70, p: [0.10, 4.30, 0.02], r: 0.46 },
+  ].map((c) => {
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(c.r, 0), leafMat);
+    m.position.set(c.p[0], c.p[1], c.p[2]);
+    m.castShadow = true;
+    m.scale.setScalar(0.001);
+    treeGroup.add(m);
+    return { mesh: m, at: c.at };
+  });
+
+  // ---- the character -----------------------------------------------------
+  const hero = K.mascot(THREE, { scale: 0.55 });
+  hero.group.position.set(-0.95, TOP, 1.35);
+  scene.add(hero.group);
+
+  const camPath = K.camPath(THREE, STORY.camera);
+  const gradeEl = document.getElementById('grade');
+
+  /* ---------------------------------------------------------------- *
+   * 3 · draw(t): pure function of time. No clocks, no unseeded random.
+   * ---------------------------------------------------------------- */
+  const B = STORY.beats;
+
+  draw = function (t) {
+    // ---------- light: a cold night, dipped after the collapse, warmed by the moon
+    const dip = 1 - 0.42 * K.seg(t, B.collapse[0] + 0.15, B.collapse[1] + 0.2)
+                  + 0.60 * K.seg(t, B.sprout[0], B.moonFall[1]);
+    rig.key.intensity = 3.1 * dip;
+    rig.hemi.intensity = 1.35 * dip;
+    rig.rim.intensity = 0.55 * dip;
+    rig.key.color.copy(KEY_NIGHT).lerp(KEY_WARM, K.seg(t, B.moonFall[0], B.moonFall[1]));
+
+    // ---------- the tower: each stone falls into place, then the whole thing comes apart
+    for (let i = 0; i < stones.length; i++) {
+      const s = stones[i], m = s.mesh;
+      if (t < s.birth) { m.visible = false; continue; }
+      m.visible = true;
+      if (t < B.collapse[0]) {
+        const drop = K.seg(t, s.birth, s.birth + 0.34);
+        const land = Math.sin(Math.PI * K.seg(t, s.birth + 0.30, s.birth + 0.62));
+        m.position.set(s.home.x, s.home.y + 2.4 * (1 - drop * drop), s.home.z);
+        m.scale.set(1 + 0.10 * land, 1 - 0.18 * land, 1 + 0.10 * land);
+        m.rotation.set(0, s.rotY + (1 - drop) * 1.4, 0);
+      } else {
+        const k = K.easeOut(K.seg(t, B.collapse[0] + s.delay, B.collapse[0] + s.delay + 0.55));
+        const groundY = TOP + 0.09 + (i % 3) * 0.02;
+        m.position.set(s.home.x + s.vx * k * 0.6, K.lerp(s.home.y, groundY, k * k), s.home.z + s.vz * k * 0.6);
+        m.rotation.set(s.spin * k * 1.2, s.rotY + s.spin * k, s.spin * k * 0.8);
+        const bump = Math.sin(Math.PI * K.seg(t, B.collapse[0] + 0.42, B.collapse[0] + 0.85));
+        m.scale.set(1, 1 - 0.10 * bump, 1);
+      }
+    }
+
+    // ---------- the seed: from the hand into the soil
+    const seedK = K.seg(t, B.seed[0], B.seed[1]);
+    seed.visible = t > 18.55 && t < 20.7;
+    if (seed.visible) {
+      const planted = t >= B.seed[0];
+      seed.position.set(planted ? K.lerp(-0.35, 0.05, seedK) : -0.35,
+                        planted ? K.lerp(TOP + 0.26, TOP + 0.02, seedK) : TOP + 0.26,
+                        planted ? K.lerp(0.92, 0.10, seedK) : 0.92);
+      seed.scale.setScalar(planted ? 1 - 0.5 * seedK : 1);
+    }
+
+    // ---------- the sprout pushes out, then the trunk takes over
+    const sproutK = K.spring(K.seg(t, B.sprout[0], B.sprout[1]), 0.2);
+    const trunkK = Math.pow(K.seg(t, B.trunk[0], B.trunk[1]), 0.85);   // steady climb, no snap
+    sprout.visible = sproutK > 0.02 && trunkK < 0.55;
+    sprout.scale.set(1, Math.max(0.02, sproutK), 1);
+    trunk.scale.set(1, Math.max(0.001, trunkK), 1);
+
+    // ---------- branches in sequence, then the crown fills in
+    for (let i = 0; i < BRANCHES.length; i++) {
+      const b = BRANCHES[i];
+      const k = K.spring(K.seg(t, b.at, b.at + 0.95), 0.22);
+      b.br.scale.set(1, Math.max(0.001, k), 1);
+    }
+    for (let i = 0; i < CROWN.length; i++) {
+      const c = CROWN[i];
+      const k = K.spring(K.seg(t, c.at, c.at + 0.85), 0.18);
+      const breath = 1 + 0.004 * Math.sin(t * 1.4 + i);   // the only motion in the last beat
+      c.mesh.scale.setScalar(Math.max(0.001, k) * breath);
+    }
+
+    // ---------- the moon slides down onto the tip
+    const moonK = K.easeInOut(K.seg(t, B.moonFall[0], B.moonFall[1]));
+    moon.position.lerpVectors(MOON_HOME, MOON_TIP, moonK);
+    moonGlow.position.copy(moon.position);
+    moonGlow.scale.setScalar(3.8 + 1.3 * moonK);
+    moonGlow.material.opacity = 0.5 + 0.42 * moonK;
+
+    // ---------- colour: it drains at the collapse and comes back with the tree
+    const grey = 0.55 * K.seg(t, B.dull[0], B.dull[1]) - 0.55 * K.seg(t, 20.5, 24.5);
+    gradeEl.style.opacity = String(Math.max(0, grey));
+
+    // ---------- the character: one continuous performance, keyed on t
+    let hx = -0.95, hy = TOP, hz = 1.35, air = 0;
+    let look = 1.15, squash = 1, walking = 0;
+
+    if (t < B.walkIn[0]) {
+      // standing under the moon, two reach-jumps
+      const r1 = Math.sin(Math.PI * K.seg(t, B.reach1[0], B.reach1[1]));
+      const r2 = Math.sin(Math.PI * K.seg(t, 3.00, 3.70));
+      air = 0.30 * r1 + 0.18 * r2;
+      squash = 1 - 0.10 * Math.sin(Math.PI * K.seg(t, 1.00, 1.22));
+    } else if (t < B.walkIn[1] + 0.1) {
+      const k = K.seg(t, B.walkIn[0], B.walkIn[1]);
+      hx = K.lerp(-0.95, -0.55, K.easeInOut(k));
+      hz = K.lerp(1.35, 0.75, K.easeInOut(k));
+      walking = k > 0 && k < 1 ? t * 1.6 : 0;
+      look = 0.55;
+    } else if (t < B.climb[0]) {
+      hx = -0.62; hz = 0.78; look = 0.35 + 0.22 * Math.sin(t * 0.7);
+    } else if (t < B.collapse[0]) {
+      // hops up onto the tower, then tiptoes
+      const k = K.seg(t, B.climb[0], B.climb[1]);
+      hx = K.lerp(-0.62, 0.0, K.easeInOut(k));
+      hz = K.lerp(0.78, 0.12, K.easeInOut(k));
+      hy = K.lerp(TOP, TOWER_TOP + 0.02, K.easeInOut(k));
+      air = Math.sin(Math.PI * k) * 0.45 + Math.sin(Math.PI * K.seg(t, B.tiptoe[0], B.tiptoe[1])) * 0.20;
+      squash = 1 - 0.12 * Math.sin(Math.PI * K.seg(t, B.tiptoe[0], B.tiptoe[1] + 0.2));
+      look = 1.15;
+    } else if (t < 18.0) {
+      // it drops with the tower and sits stunned on the ground
+      const fall = K.seg(t, B.collapse[0], B.collapse[1] - 0.35);
+      hy = K.lerp(TOWER_TOP + 0.02, TOP, fall * fall);
+      hx = K.lerp(0.0, -0.30, fall);
+      hz = K.lerp(0.12, 0.95, fall);
+      squash = fall > 0.94 ? 0.86 : 1;
+      look = 0.25;
+    } else if (t < B.leave[0]) {
+      // kneels and presses the seed in
+      hx = -0.30; hz = 0.95; look = 0.6;
+      squash = 1 - 0.22 * K.seg(t, B.crouch[0], B.crouch[1]);
+    } else if (t < B.sprout[0] + 0.2) {
+      // turns away and walks out of frame
+      const k = K.seg(t, B.leave[0], B.leave[1]);
+      hx = K.lerp(-0.30, -3.10, K.easeInOut(k));
+      hz = K.lerp(0.95, 1.60, K.easeInOut(k));
+      walking = t * 1.5;
+      air = Math.abs(Math.sin(t * 10)) * 0.02;
+      look = Math.PI;
+    } else if (t < B.return[0]) {
+      hx = -3.10; hz = 1.60; look = Math.PI * 0.85;
+    } else {
+      // comes back and sits under the tree
+      const k = K.seg(t, B.return[0], B.return[1]);
+      hx = K.lerp(-3.10, -1.35, K.easeInOut(k));
+      hz = K.lerp(1.60, 1.95, K.easeInOut(k));
+      walking = k > 0 && k < 1 ? t * 1.5 : 0;
+      air = walking ? Math.abs(Math.sin(t * 10)) * 0.02 : 0;
+      look = Math.PI * 0.55;
+      squash = 1 - 0.20 * K.seg(t, B.sit[0], B.sit[1]);
+    }
+
+    hero.pose({ walk: walking, bob: 0, jump: 0, look, eyes: 1, squash });
+    hero.group.position.set(hx, hy + air, hz);
+
+    // camera
+    camPath(camera, t);
+    rig.sync(camera);          // the fill follows the lens (no-op when fill is off)
+
+    // 2D layer (captions)
+    window.UI.frame(t);
+
+    renderer.render(scene, camera);
+  };
+
+  window.UI.mount({ duration: STORY.duration, captionIn: 29.3, captionInEnd: 30.0, captionOut: 31.2, captionOutEnd: 32.0 });
+  draw(0);
+})().catch((e) => {
+  const msg = String((e && e.message) || e);
+  hudText('boot failed: ' + msg, true);
+  throw e;
+});
+
+/* ==================================================================== *
+ * 4 · one paused timeline drives everything; the duration is the story
+ * ==================================================================== */
+const film = document.getElementById('film');
+const composeId = film.dataset.compositionId;
+const DURATION = Number(film.dataset.duration) || STORY.duration;
+
+const ready = boot.then(async () => {
+  await loadGsap();
+  const tl = window.gsap.timeline({ paused: true });
+  const proxy = { t: 0 };
+  Object.defineProperty(proxy, 't', {
+    get: () => proxy._t || 0,
+    set: (v) => { proxy._t = v; draw(v); },
+  });
+  tl.fromTo(proxy, { t: 0 }, { t: DURATION, duration: DURATION, ease: 'none', immediateRender: false }, 0);
+
+  // scene labels: they are the soundtrack's sections and your own rhythm sheet
+  tl.addLabel('scene:reach', 0)
+    .addLabel('scene:build', STORY.beats.walkIn[0])
+    .addLabel('scene:top', STORY.beats.climb[0])
+    .addLabel('scene:collapse', STORY.beats.collapse[0])
+    .addLabel('scene:seed', 18.0)
+    .addLabel('scene:grow', STORY.beats.sprout[0])
+    .addLabel('scene:moon', STORY.beats.moonFall[0])
+    .addLabel('scene:end', STORY.beats.return[0]);
+
+  window.__timelines = window.__timelines || {};
+  window.__timelines[composeId] = tl;
+
+  // any renderer that is not huashu-motion can drive the film through this
+  window.film = {
+    duration: DURATION,
+    seek(t) { tl.pause(); tl.seek(t, false); draw(t); },
+    draw,
+    ready: true,
+  };
+
+  // huashu-motion (om) hooks: sound is declared here, not placed in an editor
+  if (window.OM && window.OM.music) {
+    // a story film: the score dips to almost nothing while the tower is down
+    window.OM.music({ product: 'explainer', style: 'piano', bpm: 74, ending: 'ring',
+      energy: { reach: 0.32, build: 0.55, top: 0.72, collapse: 0.06, seed: 0.30,
+                grow: 0.62, moon: 0.95, end: 0.45 } });
+    const SFX = [
+      [1.10, 'tick'], [2.55, 'boing', { gain: 0.6 }],
+      [4.35, 'thud', { gain: 0.9 }], [5.37, 'thud'], [6.39, 'thud'], [7.41, 'thud', { pitch: 1.1 }],
+      [8.43, 'thud', { pitch: 1.2 }], [9.45, 'thud', { pitch: 1.3 }], [10.47, 'thud', { pitch: 1.4 }],
+      [11.40, 'boing'], [12.65, 'thud'],
+      [15.02, 'impact'], [15.20, 'thud', { gain: 0.8 }], [15.42, 'thud', { gain: 0.7 }], [15.66, 'thud', { gain: 0.6 }],
+      [18.60, 'tick', { gain: 0.5 }], [19.40, 'click', { gain: 0.5 }],
+      [22.10, 'riser', { dur: 1.6 }], [23.30, 'pop'], [24.05, 'pop'], [24.75, 'pop'], [25.35, 'pop'],
+      [25.90, 'chime'], [26.70, 'chime'],
+      [27.30, 'riser', { dur: 1.4 }], [29.10, 'sparkle'], [29.20, 'chime'], [30.70, 'ding'],
+    ];
+    SFX.forEach(([time, name, opts]) => window.OM.sfx(name, time, opts));
+  }
+  return true; // NOT the timeline: a GSAP timeline is thenable, and returning it into a
+});            // promise chain makes the promise wait for the animation to finish — it never does.
+
+// tell every frame renderer to wait for the dependencies before sampling a frame
+window.__hf = window.__hf || {};
+window.__hf.buildReady = window.__hf.buildReady || {};
+window.__hf.buildReady['skeleton:deps'] = ready;
+if (window.OM && window.OM.ready) window.OM.ready(ready);
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+name: selfcheck
+
+# The repository's own gate: structure, relative references, and the determinism rules
+# (no Date.now / performance.now / Math.random in a film). No browser, no network, ~5 s.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: selfcheck
+        run: node scripts/selfcheck.mjs .
+      - name: scripts parse
+        run: for f in scripts/*.mjs; do node --check "$f"; done
