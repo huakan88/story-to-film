@@ -202,7 +202,7 @@ const boot = (async () => {
 
   // props: kept BEHIND the subject (the camera sits at +x/+z) so they frame it, never hide it
   for (let i = 0; i < 3; i++) {
-    const a = 2.15 + i * 0.95;                 // back-left → back-right
+    const a = 2.95 + i * 0.62;                 // back-left → back-right, clear of the walk-in path
     const r = 3.0 + rnd() * 0.7;
     const tree = K.pine(THREE, { h: 1.0 + rnd() * 0.45, rand: rnd });
     tree.position.set(Math.cos(a) * r, TOP, Math.sin(a) * r);
@@ -286,7 +286,7 @@ const boot = (async () => {
     // the character walks in, then idles facing the sprout
     const w = K.seg(t, B.walkIn[0], B.walkIn[1]);
     const walking = w > 0 && w < 1;
-    hero.group.position.x = K.lerp(-2.35, -1.62, K.easeInOut(w));
+    hero.group.position.x = K.lerp(-1.9, -1.15, K.easeInOut(w));
     hero.group.position.z = 1.55;
     hero.pose({
       walk: walking ? t * 1.7 : 0,

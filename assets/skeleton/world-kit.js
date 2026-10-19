@@ -23,8 +23,19 @@
     skyBottom: 0xf2e2c8,
     sun: 0xffd9a0,
     star: 0xdfe8ff,
-    mascot: 0xd97757,
-    mascotDark: 0xb85a3d,
+    figureTunic: 0x6d7f93,
+
+    figureTunicDark: 0x55647a,
+
+    figureSkin: 0xe8c39a,
+
+    figureStraw: 0xd9b86a,
+
+    // kept as aliases so older films that read PAL.mascot still get a sane colour
+
+    mascot: 0x6d7f93,
+
+    mascotDark: 0x55647a,
     eye: 0x241512,
     accent: 0xc07c48,
   };
@@ -142,92 +153,157 @@
     return sp;
   };
 
-  // ---------------------------------------------------------------- mascot
-  // A neutral little character: rounded body, two eyes, a nub on each side, four legs.
-  // pose({ walk, bob, jump, look, squash, crouch, sit, reach, eyes }) — the same call works for any
-  // character you swap in. crouch / sit / reach are pose offsets in 0..1 (0 = the neutral stand):
-  //   crouch — body drops and tips forward ("about to jump", "planting something")
-  //   sit    — body drops onto folded rear legs, front legs stay straight ("waiting")
-  //   reach  — body tips forward and the side nubs push forward/down ("press it into the soil")
+  // ---------------------------------------------------------------- character
+  // A small anthropomorphic figure — the default hero of this kit. Two arms, two legs,
+  // a head, and an optional hat / beard / tool, because most stories are about a person
+  // doing something to the world. The pose contract is the whole vocabulary of the film:
+  //
+  //   const hero = K.mascot(THREE, { scale: 1 });     // K.figure is the same function
+  //   hero.pose({ walk: .3, bob: .01, look: .4, crouch: 0, reach: 0, sit: 0, eyes: 1 })
+  //
+  // Everything is derived from those values — no clocks, no random, no state between frames.
   K.mascot = function (THREE, opts) {
     const o = opts || {};
     const s = o.scale == null ? 1 : o.scale;
+    const tunic = o.tunic == null ? (o.color == null ? K.PAL.figureTunic : o.color) : o.tunic;
+    const tunicDk = o.tunicDark == null ? (o.tunicDark === undefined ? K.PAL.figureTunicDark : o.tunicDark) : o.tunicDark;
+    const skin = o.skin == null ? K.PAL.figureSkin : o.skin;
+    const straw = o.straw == null ? K.PAL.figureStraw : o.straw;
+
     const g = new THREE.Group();
-    const bodyMat = K.mat(THREE, o.color == null ? K.PAL.mascot : o.color, { roughness: 0.72 });
+    const tunicMat = K.mat(THREE, tunic, { roughness: 0.95 });
+    const tunicDkMat = K.mat(THREE, tunicDk, { roughness: 0.95 });
+    const skinMat = K.mat(THREE, skin, { roughness: 0.9 });
 
-    const body = new THREE.Mesh(K.roundBox(THREE, 1.0, 0.74, 0.62, 0.1, 3), bodyMat);
-    body.position.y = 0.56;
-    body.castShadow = true;
-    body.receiveShadow = true;
-    g.add(body);
-
-    const eyeMat = K.mat(THREE, K.PAL.eye, { roughness: 0.35 });
-    const eyes = new THREE.Group();
-    for (const sx of [-0.2, 0.2]) {
-      const e = new THREE.Mesh(K.roundBox(THREE, 0.085, 0.14, 0.03, 0.03, 2), eyeMat);
-      e.position.set(sx, 0.62, 0.315);
-      eyes.add(e);
-    }
-    g.add(eyes);
-
-    const nubMat = K.mat(THREE, o.color == null ? K.PAL.mascotDark : o.color, { roughness: 0.7 });
-    const nubs = [];
-    for (const sx of [-0.52, 0.52]) {
-      const nub = new THREE.Mesh(K.roundBox(THREE, 0.1, 0.1, 0.16, 0.04, 2), nubMat);
-      nub.position.set(sx, 0.54, 0);
-      g.add(nub);
-      nubs.push(nub);
-    }
-
+    // ---- legs (they swing while walking, fold under the body when sitting) ----
     const legs = [];
-    for (let i = 0; i < 4; i++) {
-      const leg = new THREE.Mesh(K.roundBox(THREE, 0.13, 0.24, 0.14, 0.05, 2), bodyMat);
+    for (const sx of [-0.15, 0.15]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.44, 0.19), tunicDkMat);
+      leg.position.set(sx, 0.22, 0);
       leg.castShadow = true;
-      leg.position.set(i < 2 ? -0.24 : 0.24, 0.12, i % 2 === 0 ? -0.16 : 0.16);
       g.add(leg);
       legs.push(leg);
     }
-    g.scale.setScalar(s);
 
-    const st = { walk: 0, bob: 0, jump: 0, look: 0, squash: 1, crouch: 0, sit: 0, reach: 0, eyes: 1 };
+    // ---- torso -----------------------------------------------------------------
+    const torso = new THREE.Mesh(K.roundBox(THREE, 0.62, 0.62, 0.42, 0.08, 2), tunicMat);
+    torso.position.y = 0.74;
+    torso.castShadow = true;
+    torso.receiveShadow = true;
+    g.add(torso);
+    const sash = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.09, 0.44), tunicDkMat);
+    sash.position.y = 0.62;
+    g.add(sash);
+
+    // ---- head, eyes, optional beard and hat -----------------------------------
+    const head = new THREE.Group();
+    head.position.y = 1.24;
+    g.add(head);
+    const skull = new THREE.Mesh(K.roundBox(THREE, 0.42, 0.38, 0.38, 0.07, 2), skinMat);
+    skull.castShadow = true;
+    head.add(skull);
+
+    const eyeMat = K.mat(THREE, K.PAL.eye, { roughness: 0.4 });
+    const eyes = new THREE.Group();
+    for (const sx of [-0.09, 0.09]) {
+      const e = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.07, 0.02), eyeMat);
+      e.position.set(sx, 0.02, 0.2);
+      eyes.add(e);
+    }
+    head.add(eyes);
+
+    if (o.beard) {
+      const beard = new THREE.Mesh(K.roundBox(THREE, 0.24, 0.26, 0.1, 0.04, 2),
+        K.mat(THREE, o.beardColor == null ? 0xf2efe6 : o.beardColor, { roughness: 1 }));
+      beard.position.set(0, -0.24, 0.16);
+      head.add(beard);
+    }
+    if (o.hat) {
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.46, 0.05, 10), K.mat(THREE, straw, { roughness: 1 }));
+      brim.position.y = 0.26;
+      brim.castShadow = true;
+      head.add(brim);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.2, 10), K.mat(THREE, straw, { roughness: 1 }));
+      cap.position.y = 0.36;
+      head.add(cap);
+    }
+
+    // ---- arms; the right one pivots at the shoulder and can hold a tool --------
+    const armGeo = new THREE.BoxGeometry(0.13, 0.44, 0.15);
+    const armL = new THREE.Mesh(armGeo, tunicMat);
+    armL.position.set(-0.38, 0.82, 0);
+    armL.castShadow = true;
+    g.add(armL);
+
+    const armR = new THREE.Group();
+    armR.position.set(0.38, 1.0, 0);
+    g.add(armR);
+    const armRMesh = new THREE.Mesh(armGeo, tunicMat);
+    armRMesh.position.y = -0.2;
+    armRMesh.castShadow = true;
+    armR.add(armRMesh);
+
+    const toolName = o.tool || null;
+    if (toolName) {
+      const wood = K.mat(THREE, o.wood == null ? 0x8a6034 : o.wood, { roughness: 1 });
+      const tool = new THREE.Group();
+      if (toolName === 'hoe') {
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.05, 0.06), wood);
+        shaft.position.y = -0.55;
+        tool.add(shaft);
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.3, 0.05),
+          K.mat(THREE, 0x6b6b6b, { roughness: 0.6, metalness: 0.3 }));
+        blade.position.set(0.1, -1.05, 0);
+        blade.rotation.z = -0.4;
+        tool.add(blade);
+      } else {
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.055, 1.25, 0.055), wood);
+        shaft.position.y = -0.5;
+        tool.add(shaft);
+      }
+      tool.position.y = -0.18;
+      armR.add(tool);
+    }
+
+    const st = { walk: 0, bob: 0, jump: 0, look: 0, crouch: 0, reach: 0, sit: 0, eyes: 1, squash: 1 };
+
     const pose = (p) => {
       Object.assign(st, p || {});
-      const t = st.walk;
       const crouch = K.clamp(st.crouch), sit = K.clamp(st.sit), reach = K.clamp(st.reach);
-      // body: the three offsets stack; all of them are pure functions of the pose values
-      const drop = crouch * 0.16 + sit * 0.26;
-      const tipFwd = crouch * 0.42 + reach * 0.5;
-      body.position.y = 0.56 - drop - reach * 0.04;
-      body.scale.set(1 + sit * 0.06, 1 - crouch * 0.18 - sit * 0.04, 1 + sit * 0.1);
-      g.position.y = st.bob + st.jump - (1 - st.squash) * 0.25;
+      const drop = crouch * 0.14 + sit * 0.3;
+      const tip = crouch * 0.34 + reach * 0.55;
+
+      g.position.y = st.bob + st.jump;
       g.rotation.y = st.look;
-      g.rotation.x = tipFwd;
-      g.rotation.z = Math.sin(t * Math.PI * 2) * 0.03;
+      g.rotation.x = tip;
       g.scale.set(s * (2 - st.squash), s * st.squash, s * (2 - st.squash));
+
       legs.forEach((leg, i) => {
-        const ph = t * Math.PI * 2 + (i % 2 ? Math.PI : 0) + (i < 2 ? 0 : Math.PI);
-        const rear = i % 2 === 0;
-        // sitting folds the rear legs under the body and keeps the front pair straight
-        const fold = sit * (rear ? 1 : 0.15);
-        leg.position.y = (0.12 + Math.max(0, Math.sin(ph)) * 0.05) * (1 - fold * 0.7) - fold * 0.02;
-        leg.position.z = (rear ? -0.16 : 0.16) + Math.cos(ph) * 0.03 + fold * 0.06;
-        leg.position.x = (i < 2 ? -0.24 : 0.24) * (1 - sit * 0.18);
-        leg.scale.y = 1 - crouch * 0.22 - fold * 0.45;
+        const ph = st.walk * Math.PI * 2 + (i ? Math.PI : 0);
+        leg.position.z = Math.sin(ph) * 0.16 * (1 - sit);
+        leg.position.y = 0.22 - drop * 0.5 - sit * 0.06;
+        leg.rotation.x = Math.sin(ph) * 0.5 * (1 - sit) + sit * 1.1;
+        leg.scale.y = 1 - sit * 0.35;
       });
-      // the nubs are this character's hands: reaching pushes them forward and down
-      nubs.forEach((nub) => {
-        nub.position.z = -0.02 + reach * 0.26;
-        nub.position.y = 0.54 - drop * 0.7 - reach * 0.16;
-        nub.rotation.x = -reach * 0.7;
-      });
-      // eyes: 1 = open, →0 = shut (a blink is just a value you pass in)
-      const eyesOpen = K.clamp(st.eyes, 0.02, 1);
-      eyes.scale.y = eyesOpen;
-      eyes.position.y = -drop * 0.9;
+
+      torso.position.y = 0.74 - drop;
+      torso.scale.set(1 + sit * 0.05, 1 - crouch * 0.06, 1 + sit * 0.06);
+      sash.position.y = 0.62 - drop;
+      head.position.y = 1.24 - drop;
+      head.rotation.x = tip * 0.35;
+
+      armL.position.y = 0.82 - drop;
+      armL.rotation.x = -Math.sin(st.walk * Math.PI * 2) * 0.5;
+      armR.position.y = 1.0 - drop;
+      armR.rotation.x = 0.25 + reach * 1.35 - crouch * 0.2;
+
+      eyes.scale.y = Math.max(0.06, K.clamp(st.eyes));
     };
     pose({});
-    return { group: g, pose, body, eyes };
+
+    return { group: g, pose, body: torso, eyes, head, arms: [armL, armR] };
   };
+  K.figure = K.mascot;   // the same factory under a name that says what it is
 
   // ---------------------------------------------------------------- voxels
   // Accumulates quads with a colour each and merges them into ONE geometry:

@@ -28,9 +28,9 @@
 <div id="film" data-composition-id="moon-tree" data-width="1920" data-height="1080"
      data-fps="60" data-duration="31">
   <!--
-    No <audio> here on purpose: this repository does not ship the 5.7 MB soundtrack, and a dangling
+    No here on purpose: this repository does not ship the 5.7 MB soundtrack, and a dangling
     src is a hard `om check` error. `om sound .` regenerates assets/sound.wav from the OM.music/OM.sfx
-    declarations near the bottom of this file and inserts the <audio id="om-sound"> tag itself; `om render`
+    declarations near the bottom of this file and inserts the tag itself; `om render`
     runs that step first, so the render has music either way.
   -->
   <canvas id="gl" width="1920" height="1080"></canvas>

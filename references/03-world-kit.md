@@ -50,8 +50,13 @@ const mesh = new THREE.Mesh(v.build(), K.voxMaterial(THREE));
 
 ### 角色
 
+默认角色是一个**拟人小木人**：两条腿、一件长袍、一个头、可选的斗笠 / 白须 / 工具
+（`tool: 'hoe'` 锄头、`'staff'` 手杖）。轮廓就是"一个人"，所以任何"某个人对世界做了什么"的故事
+都能直接开拍；`K.figure` 是同一个工厂的别名。
+
 ```js
-const hero = K.mascot(THREE, { scale: 1 });   // → { group, pose, body, eyes }
+const hero = K.mascot(THREE, { scale: 1 });   // → { group, pose, body, eyes, head, arms }
+// 换造型：K.mascot(THREE, { scale: 1, tunic: 0x4a5a6a, hat: true, beard: true, tool: 'hoe' })
 hero.pose({ walk: .4, bob: .02, jump: 0, look: .3, squash: 1 });
 ```
 
