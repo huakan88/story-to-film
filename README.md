@@ -136,7 +136,7 @@ CONTRIBUTING.md             改方法 / 改代码 / 发布的三套规矩
 
 | 项 | 结果 |
 |---|---|
-| 干净拷贝（3 MB，仅仓库文件） | `om still` / `om check` / `node scripts/*.mjs` 全部可用，无缺文件 |
+| 干净拷贝（约 3.6 MB 压缩包 / 仓库 4.5 MB，仅仓库文件） | `om still` / `om check` / `node scripts/*.mjs` 全部可用，无缺文件 |
 | `node scripts/selfcheck.mjs` | 3 个工程全过（结构 / 引用 / 确定性，<1 秒，不联网） |
 | `om check examples/seed-to-forest` | **0 errors**；3 条 `low-contrast` 是字幕尚未显示时刻的误报（判据见 `references/06-review.md`） |
 | `om check examples/moon-tree` | 0 errors（同一条误报） |
