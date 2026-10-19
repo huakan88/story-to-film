@@ -24,6 +24,15 @@
 
 这不是"AI 生成视频"，是**用代码搭一个微缩世界，再用时间线把它演出来**——所以它稳、可审片、可交付。
 
+## 两个示例（源码就在仓库里）
+
+| 示例 | 时长 | 体裁 | 演示什么 |
+|---|---|---|---|
+| [`examples/moon-tree`](examples/moon-tree) | 31s | **故事片** | 一个角色 + 一件够不到的东西：垒塔失败 → 塔塌（去饱和 + 静音）→ 种下最后一颗种子 → 树长到月亮边上。看"代价 → 转折 → 落点"怎么拍 |
+| [`examples/seed-to-forest`](examples/seed-to-forest) | 18s | **构建片** | 空场 → 种子 → 嫩芽 → 松树 → 整座岛上的森林 + 字幕。看"从无到有"的累积节奏 |
+
+两个都是 `assets/skeleton` 的直系后代：同一个 `world-kit.js`，只改了 `STORY` 块与 `draw(t)`。
+
 ## 为什么是「代码生成」
 
 - **可复现**：同一条时间线，每次都渲出同一部片子。没有"这一步手工调一下"。
@@ -73,7 +82,7 @@ git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-fi
 装好之后，当你说「把这段故事做成一条短片 / 做个构建片」，agent 会：
 
 1. 把故事改写成 8 拍（`references/01-story-to-beats.md`）
-2. 逐条翻译成叙事动作（`references/02-shot-grammar.md` 的 22 行动作字典）
+2. 逐条翻译成叙事动作（`references/02-shot-grammar.md` 的 24 行动作字典）
 3. 用 `assets/skeleton/` 搭世界，先做最难的镜头
 4. 冷审片（`references/06-review.md`），修一轮
 5. 出片、交付、写诚实清单
@@ -104,7 +113,7 @@ git clone https://github.com/huakan88/story-to-film ~/.agents/skills/story-to-fi
 SKILL.md                    agent 入口：触发条件 + 六阶段 + 五条铁律
 references/
   01-story-to-beats.md      故事 → 8 拍 + 能量曲线 + 时长预算
-  02-shot-grammar.md        ★ 叙事动作 → 镜头语法（22 行字典，本仓库的核心）
+  02-shot-grammar.md        ★ 叙事动作 → 镜头语法（24 行字典，本仓库的核心）
   03-world-kit.md           世界套件 API：角色工厂 / 体素 / 道具 / 相机 / 灯光 / 性能
   04-timeline.md            时间线契约、确定性、接 om、没 om 怎么渲染
   05-sound-and-voice.md     配乐、音效打点、旁白与字幕
@@ -117,10 +126,11 @@ assets/
     README.md               四个文件怎么改
   beats-template.md         一页纸分镜表（复制填写）
 scripts/
-  new-film.mjs              从骨架新建一个工程
+  new-film.mjs              从骨架新建一个工程（顺带把 om.js 拷进去，片子才有声音）
   vendor-three.mjs          冻结 three/gsap 到本地（离线、可复现）
   qa-sheet.mjs              成片联络表（给冷审片看）
   selfcheck.mjs             仓库自检：结构 / 引用 / 确定性，不联网
+  check-shotlist.mjs        shotlist.md 的时间列 ↔ data-duration 对账（分镜与代码不脱节）
   push-to-github.mjs        没有 git 也能发布（REST API 直推，支持删除）
 examples/
   seed-to-forest/           ★ 示例一（18 秒 · 构建片）：story.md + index.html + world-kit

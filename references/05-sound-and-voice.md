@@ -2,6 +2,19 @@
 
 声音是半条命。默认**要有声音**；只有在做片头循环或纯动效时才静音。
 
+## 先记住这条顺序（新工程最常见的翻车）
+
+```
+写 OM.music / OM.sfx 声明  →  om sound .   →  om render .
+                                 ↑ 少一步就是一条无声片，而且不报错
+```
+
+- `om sound` 才会生成 `assets/sound.wav` 并把 `<audio id="om-sound">` 注进 `index.html`；
+  `om render` **不会**替你做。
+- 交付前用 `ffprobe -select_streams a` 确认有音轨（见 `06-review.md`）。
+- 页面里没有 `om.js` 时 `window.OM` 不带 `music/sfx`，`if (window.OM && window.OM.music)` 会**静默跳过**——
+  片子照出，只是没声音。骨架会按顺序尝试 `./om.js` → 固定版本的 CDN 副本，两处都没有就静音。
+
 ## 两条路线
 
 | 路线 | 适合 | 代价 |
