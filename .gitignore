@@ -1,0 +1,16 @@
+# renders and intermediates
+out/
+**/out/
+*.mp4
+!examples/*.mp4
+
+# vendored deps (fetch with scripts/vendor-three.mjs instead)
+vendor/
+**/vendor/
+
+# agent/tool noise
+.om/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
